@@ -1,0 +1,1 @@
+java -jar avr-loader.jar write -b 153600 -f fcount.hex -start
