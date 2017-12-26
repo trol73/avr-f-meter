@@ -731,8 +731,8 @@ Divide3:
 .EQU cMulti = 65536000 / (cFreq/1000)
 ;
 Multiply:
-	ldi XH,HIGH(cMulti) ; set multiplicator
-	ldi XL,LOW(cMulti)
+	ldi XL,LOW(cMulti)	; set multiplicator
+	ldi XH,HIGH(cMulti) 
 	clr ZH
 	clr ZL
 	clr rDiv4
@@ -1187,13 +1187,13 @@ Displ4Dec1:
 	st X+,rmp
 	st X+,rmp
 
-	ldi ZH,BYTE3(10000000) ; 10 mio
-	ldi ZL,BYTE2(10000000)
 	ldi rmp,BYTE1(10000000)
+	ldi ZL,BYTE2(10000000)
+	ldi ZH,BYTE3(10000000) ; 10 mio
 	rcall DisplDecX3
-	ldi ZH,BYTE3(1000000) ; 1 mio
-	ldi ZL,BYTE2(1000000)
 	ldi rmp,BYTE1(1000000)
+	ldi ZL,BYTE2(1000000)
+	ldi ZH,BYTE3(1000000) ; 1 mio
 	rcall DisplDecX3
 
 	ldi rmp,c1kSep ; set separator
@@ -1203,9 +1203,9 @@ Displ4Dec1:
 Displ4Dec2:
 	st X+,rmp
 
-	ldi ZH,BYTE3(100000) ; 100 k
-	ldi ZL,BYTE2(100000)
 	ldi rmp,BYTE1(100000)
+	ldi ZL,BYTE2(100000)
+	ldi ZH,BYTE3(100000) ; 100 k
 	rcall DisplDecX3
 	ldi ZL,LOW(10000)
 	ldi ZH,HIGH(10000) ; 10 k	
@@ -1313,24 +1313,24 @@ DisplDecX1c:
 ;=================================================
 ;
 Delay50ms:
-	ldi rDelH,HIGH(50000)
 	ldi rDelL,LOW(50000)
+	ldi rDelH,HIGH(50000)
 	rjmp DelayZ
 Delay10ms:
-	ldi rDelH,HIGH(10000)
 	ldi rDelL,LOW(10000)
+	ldi rDelH,HIGH(10000)
 	rjmp DelayZ
 Delay15ms:
-	ldi rDelH,HIGH(15000)
 	ldi rDelL,LOW(15000)
+	ldi rDelH,HIGH(15000)
 	rjmp DelayZ
 Delay4_1ms:
-	ldi rDelH,HIGH(4100)
 	ldi rDelL,LOW(4100)
+	ldi rDelH,HIGH(4100)
 	rjmp DelayZ
 Delay1_64ms:
-	ldi rDelH,HIGH(1640)
 	ldi rDelL,LOW(1640)
+	ldi rDelH,HIGH(1640)
 	rjmp DelayZ
 Delay100us:
 	clr rDelH
@@ -2264,9 +2264,9 @@ LcdInit:
 	ldi rmp,0x80 ; position on line 1
 	rcall LcdRs4
 	rcall delay40us ; delay 40 us
-	ldi rmp,16
 	ldi ZL,LOW(2*LcdInitTxt16)
 	ldi ZH,HIGH(2*LcdInitTxt16)
+	ldi rmp,16
 	rcall LcdText
 
 	;;; !!! TODO memove --------------[
@@ -2362,8 +2362,8 @@ UartInit: ; Init the Uart on startup
 	ldi rmp,(1<<RXCIE)|(1<<RXEN)|(1<<TXEN) ; enable RX/TX and RX-Ints
 	out UCSRB,rmp
 	rcall delay10ms ; delay for 10 ms duration
-	ldi ZH,HIGH(2*txtUartInit)
 	ldi ZL,LOW(2*txtUartInit)
+	ldi ZH,HIGH(2*txtUartInit)
 	rjmp UartSendTxt
 ;
 ; Uart receive buffer space in SRAM

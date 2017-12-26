@@ -376,10 +376,10 @@ Int0Int:
 	in	rCpy2, TCNT1H 		; 5, dto., MSB
 	rCpy3 = rCtr2 			; 6, copy the counter bytes
 	rCpy4 = rCtr3 			; 7
-	sbr	rFlg, 1<<bCyc 		; 8, set cycle end flag bit
+	rFlg |= 1<<bCyc 		; 8, set cycle end flag bit
 	cbr	rFlg, 1<<bEdge 	; 9, set falling edge
 	sbic	PIND, 2 			; 10/11, check if input = 0
-	sbr	rFlg, 1<<bEdge 	; 11, no, set edge flag to rising
+	rFlg |= 1<<bEdge 	; 11, no, set edge flag to rising
 Int0Int1: 				; 4/11
 	ldi	rimp, 0 			; 5/12, reset the timer
 	out	TCNT1H, rimp 		; 6/13, set TC1 zero to restart
@@ -404,7 +404,7 @@ Tc1CmpAInt:
 	rCpy2 = rCtr1			; 5, copy counter bytes to result
 	rCpy3 = rCtr2 			; 6
 	rCpy4 = rCtr3 			; 7
-	sbr	rFlg, 1<<bCyc 		; 8, set cycle end flag bit
+	rFlg |= 1<<bCyc 		; 8, set cycle end flag bit
 Tc1CmpAInt1: 				; 4/8
 	ldi	rimp, 0 			; 5/9, clear counter
 	out	TCNT0, rimp 		; 6/10
@@ -424,7 +424,7 @@ Tc1OvfInt:
 	brne	Tc1OvfInt1 			; 3/4, no overflow
 	rCtr3++					; 4, increase byte 4 of the counter
 	brne	Tc1OvfInt1 			; 5/6, no overflow
-	sbr	rFlg, (1<<bOvf)|(1<<bCyc) ; 6, set overflow and end of cycle bit
+	rFlg |= (1<<bOvf)|(1<<bCyc) ; 6, set overflow and end of cycle bit
 Tc1OvfInt1: 				; 4/6
 	out	SREG, rSreg 			; 5/7, restore SREG
 	reti					; 9/11
@@ -441,7 +441,7 @@ Tc0OvfInt:
 	brne	Tc0OvfInt1 			; 5/6, no overflow
 	rCtr3 ++					; 6, increase byte 4 of the counter
 	brne	Tc0OvfInt1 			; 7/8, no overflow
-	sbr	rFlg, (1<<bOvf)|(1<<bCyc) ; 8, set overflow bit
+	rFlg |= (1<<bOvf)|(1<<bCyc)   ; 8, set overflow bit
 Tc0OvfInt1: 				; 4/6/8
 	out	SREG, rSreg 			; 5/7/9, restore SREG
 	reti 					; 9/11/13
@@ -456,7 +456,7 @@ Tc0OvfInt1: 				; 4/6/8
 SioRxCIsr:
 	in	rSreg, SREG 					; 1, Save SReg
 	in	rimp, UCSRA 					; 2, Read error flags
-	andi rimp, (1<<FE)|(1<<DOR)|(1<<PE) 	; 3, isolate error bits
+	rimp &= (1<<FE)|(1<<DOR)|(1<<PE) 	; 3, isolate error bits
 	in	rimp, UDR 					; 4, read character from UART
 	breq SioRxCIsr1 					; 5/6, no errors
 	rimp =  '*'						; 6, signal an error
@@ -476,12 +476,12 @@ SioRxCIsr2: 							; 19/20
 	brne SioRxCIsr3 					; 21/22/23, No, go on
 	ldi	rimp, cLF 					; 22/23, Echo linefeed
 	out	UDR, rimp 					; 23/24
-	sbr	rFlg, (1<<bUartRxLine) 			; 24/25, Set line complete flag
+	rFlg |= (1<<bUartRxLine) 			; 24/25, Set line complete flag
 	rjmp	SioRxCIsr3a
 SioRxCIsr3: 							; 22/23/24/25
 	cpi	rimp, cLF
 	brne	SioRxCIsr3a
-	sbr	rFlg, (1<<bUartRxLine)
+	rFlg |= (1<<bUartRxLine)
 SioRxCIsr3a:
 	pop	ZL ZH						; 24/25/26/27, 26/27/28/29, restore Z-register
 SioRxCIsr4:							; 9/26/27/28/29
@@ -496,18 +496,13 @@ SioRxCIsr4:							; 9/26/27/28/29
 ; Setting timer/counter modes for measuring
 ;
 SetModeName:
-	rmp =  0xC0 ; line 2
-	rcall LcdRs4
-	rcall delay40us ; delay 40 us
+	rcall LcdRs4 (0xC0)	; line 2
+	rcall delay40us 	; delay 40 us
 	Z = MODE_0
 
 	rmp = rMode
 	; rmp *= 16
-	; rmp <<= 4
-	lsl	rmp
-	lsl	rmp
-	lsl	rmp
-	lsl	rmp						; mode * 16
+	rmp <<= 4		; mode * 16
 
 	XL = 0
 	Z += XL.rmp
@@ -701,14 +696,7 @@ ClrTc:
 	rRes3 = 0
 	rRes4 = 0
 @1:
-	; rmp.r0.ZH.ZL.XH.XL *= 2
-	; rmp.r0.ZH.ZL.XH.XL <<= 1
-	lsl XL ; multiply divisor by 2
-	rol XH
-	rol ZL
-	rol ZH
-	rol R0
-	rol rmp
+	rmp.r0.ZH.ZL.XH.XL <<= 1		; multiply divisor by 2
 	if (rmp.r0.ZH.ZL < rDiv4.rDiv3.rDiv2.rDiv1) goto @2		; compare with divident
 	rmp.r0.ZH.ZL -= rDiv4.rDiv3.rDiv2.rDiv1
 	sec
@@ -733,9 +721,7 @@ ClrTc:
 .equ cMulti = 65536000 / (cFreq/1000)
 ;
 .proc Multiply
-	;X = cMulti
-	ldi XH,HIGH(cMulti) ; set multiplicator
-	ldi XL,LOW(cMulti)
+	X = cMulti		; set multiplicator
 	ZH = 0
 	ZL = 0
 	rDiv4 = 0
@@ -751,19 +737,11 @@ ClrTc:
 	cpi XH, 0
 	breq @4
 @2:
-	; XL.XH >>= 1
-	lsr XH
-	ror XL
+	XL.XH >>= 1
 	brcc @3
 	ZH.ZL.rDiv4.rDiv3.rDiv2.rDiv1 += rmp.r0.rRes4.rRes3.rRes2.rRes1
 @3:
-	; rmp.r0.rRes4.rRes3.rRes2.rRes1 <<= 1
-	lsl rRes1
-	rol rRes2
-	rol rRes3
-	rol rRes4
-	rol R0
-	rol rmp
+	rmp.r0.rRes4.rRes3.rRes2.rRes1 <<= 1
 	rjmp @1
 @4:
 	rmp = 128 ; round result
@@ -789,9 +767,8 @@ DisplSec:
 ;
 ; An overflow has occurred during pulse width calculation
 ;
-
 .proc PulseOvflw
-	;.extern TxtPOvflw16 : prgptr
+.args v(rmp)
 	X = s_video_mem
 	st	X+, rmp
 
@@ -826,31 +803,15 @@ CalcPwO: ; overflow
 	rRes2 = R0
 	rRes3 = rDelL
 	rRes4 = rDelH
-	; rRes4.rRes3.rRes2.rRes1
-	lsl rRes1 ; * 2
-	rol rRes2
-	rol rRes3
-	rol rRes4
+	rRes4.rRes3.rRes2.rRes1 <<= 1		; * 2
 	brcs CalcPwO ; overflow
-	; rRes4.rRes3.rRes2.rRes1
-	lsl rRes1 ; * 4
-	rol rRes2
-	rol rRes3
-	rol rRes4
+	rRes4.rRes3.rRes2.rRes1 <<= 1		; * 4
 	brcs CalcPwO ; overflow
-	; rRes4.rRes3.rRes2.rRes1
-	lsl rRes1 ; * 8
-	rol rRes2
-	rol rRes3
-	rol rRes4
+	rRes4.rRes3.rRes2.rRes1 <<= 1		; * 8
 	brcs CalcPwO ; overflow
 	X = rRes2.rRes1
 	Z = rRes4.rRes3
-	; rRes4.rRes3.rRes2.rRes1
-	lsl rRes1 ; * 16 <<= 1
-	rol rRes2
-	rol rRes3
-	rol rRes4
+	rRes4.rRes3.rRes2.rRes1 <<= 1		; * 16
 	brcs CalcPwO
 	rRes4.rRes3.rRes2.rRes1 += ZH.ZL.XH.XL		; * 24
 	ZH = 0 ; clear the four MSBs of divisor
@@ -861,18 +822,10 @@ CalcPwO: ; overflow
 	rDelL = R0
 	R0 = rmp
 	rmp = 0
+
+	XH.XL.rDelH.rDelL.r0 <<= 1		; * 512
+	XH.XL.rDelH.rDelL.r0 <<= 1		; * 1024
 	
-	lsl R0 ; * 512
-	rol rDelL
-	rol rDelH
-	rol XL
-	rol XH
-	
-	lsl R0 ; * 1024
-	rol rDelL
-	rol rDelH
-	rol XL
-	rol XH
 	XH.XL.rDelH.rDelL.r0.rmp -= ZH.ZH.rRes4.rRes3.rRes2.rRes1		; * 1000
 	if (ZH.ZL.XH.XL >= rDiv4.rDiv3.rDiv2.rDiv1) goto CalcPwO		; overflow?
 	rRes1 = 0 ; clear result
@@ -881,15 +834,7 @@ CalcPwO: ; overflow
 	rRes3 = 0
 	rRes4 = 0
 @1: ; dividing loop
-	; ZH.ZL.XH.XL.rDelH.rDelL.r0.rmp <<= 1
-	lsl rmp ; multiply by 2
-	rol R0
-	rol rDelL
-	rol rDelH
-	rol XL
-	rol XH
-	rol ZL
-	rol ZH
+	ZH.ZL.XH.XL.rDelH.rDelL.r0.rmp <<= 1
 	if (ZH.ZL.XH.XL < rDiv4.rDiv3.rDiv2.rDiv1) goto @2 ; smaller, roll zero in
 	ZH.ZL.XH.XL -= rDiv4.rDiv3.rDiv2.rDiv1				 ; subtract divisor
 	sec ; roll one in
@@ -909,18 +854,18 @@ CalcPwO: ; overflow
 	rol ZH
 	if (ZH.ZL.XH.XL < rDiv4.rDiv3.rDiv2.rDiv1) goto @4
 	rmp = 1 ; round up
-	add rRes1,rmp
-	ldi rmp,0
-	adc rRes2,rmp
-	adc rRes3,rmp
-	adc rRes4,rmp
+	rRes1 += rmp
+	ldi rmp, 0
+	adc rRes2, rmp
+	adc rRes3, rmp
+	adc rRes4, rmp
 @4:
 	if (rRes4 != 0) goto @E
 	if (rRes3 != 0) goto @E
-	ldi rmp,LOW(1001)
-	cp rRes1,rmp
-	ldi rmp,HIGH(1001)
-	cpc rRes2,rmp
+	rmp = LOW(1001)
+	cp rRes1, rmp
+	rmp = HIGH(1001)
+	cpc rRes2, rmp
 	brcc @E
 	clc ; no error
 	ret
@@ -936,7 +881,7 @@ DisplPw:
 	rmp = ' '
 	st	X+, rmp
 	st	X+, rmp
-	R0 = 0
+	r0 = 0
 	Z = 1000
 	rcall DisplDecX2
 	Z = 100
@@ -1052,7 +997,7 @@ DisplPw:
 		rRes2 = 0
 		R0 = rRes1 ; * 1
 		lsl	rRes1 ; * 2
-		adc	rRes2,rRes3
+		adc	rRes2, rRes3
 		lsl	rRes1 ; * 4
 		rol	rRes2
 		rRes2.rRes1 += rRes3.r0
@@ -1089,7 +1034,7 @@ DisplPw:
 	if (r0 != 0) goto @c
 	rmp = ' '
 @c:
-	st X+,rmp
+	st X+, rmp
 	ret
 .endproc
 ;
@@ -1143,7 +1088,7 @@ DisplPw:
 	rcall DisplDecX3
 
 	rmp = c1kSep ; set separator
-	if (R0 != 0) goto @2
+	if (r0 != 0) goto @2
 	rmp = ' '
 @2:
 	st X+, rmp
@@ -1221,8 +1166,8 @@ DisplPw:
 	rjmp @a
 @b:
 	rmp = '0' + rDiv1
-	R0 += rDiv1
-	if (R0 != 0) goto @c
+	r0 += rDiv1
+	if (r0 != 0) goto @c
 	rmp = ' '
 @c:
 	st X+, rmp
@@ -1249,7 +1194,7 @@ Delay1_64ms:
 	rDelH.rDelL = 1640
 	rjmp DelayZ
 Delay100us:
-	; rDelH.rDelL = 100
+	;rDelH.rDelL = 100
 	rDelH = 0
 	rDelL = 100
 	rjmp DelayZ
@@ -1293,7 +1238,7 @@ DelayZ:
 	nop
 	nop
 .ENDIF
-	sbiw rDelL, 1 ; 2
+	rDelH.rDelL -= 1
 	brne DelayZ ; 2
 	ret
 ;
@@ -1308,21 +1253,13 @@ main:
 	out SPL,rmp
 	rFlg = 0 ; set flags to default
 ;
+
 .IF debug
 .EQU number = 100000000
-	; rRes4 = rmp = BYTE4(number)
-	rmp = BYTE4(number)
-	rRes4 = rmp
-	rDiv4 = rmp
-	rmp = BYTE3(number)
-	rRes3 = rmp
-	rDiv3 = rmp
-	ldi rmp,BYTE2(number)
-	rRes2 = rmp
-	rDiv2 = rmp
-	ldi rmp,BYTE1(number)
-	rRes1 = rmp
-	rDiv1 = rmp
+	rDiv4 = rRes4 = rmp = BYTE4(number) 
+	rDiv3 = rRes3 = rmp = BYTE3(number)
+	rDiv2 = rRes2 = rmp = BYTE2(number)
+	rDiv1 = rRes1 = rmp = BYTE1(number)
 	rcall CycleM6
 beloop:	
 	rjmp beloop
@@ -1331,26 +1268,19 @@ beloop:
 	.EQU nhigh = 100000000
 	.EQU nlow = 15000
 	rmp = BYTE4(nhigh)
-	sts sCtr+3,rmp
+	sts sCtr+3,rmp	
 	rmp = BYTE3(nhigh)
 	sts sCtr+2,rmp
 	rmp = BYTE2(nhigh)
 	sts sCtr+1,rmp
 	rmp = BYTE1(nhigh)
 	sts sCtr,rmp
-	rmp = BYTE4(nlow)
-	rRes4 = rmp
-	rDiv4 = rmp
-	rmp = BYTE3(nlow)
-	rRes3 = rmp
-	rDiv3 = rmp
-	rmp = BYTE2(nlow)
-	rRes2 = rmp
-	rDiv2 = rmp
-	rmp = BYTE1(nlow)
-	rRes1 = rmp
-	rDiv1 = rmp
-	sbr rFlg,1<<bEdge
+	
+	rDiv4 = rRes4 = rmp = BYTE4(nlow)
+	rDiv3 = rRes3 = rmp = BYTE3(nlow)
+	rDiv2 = rRes2 = rmp = BYTE2(nlow)
+	rDiv1 = rRes1 = rmp  = BYTE1(nlow)
+	rFlg |= 1<<bEdge
 	rcall CycleM7
 bploop: 
 	rjmp bploop
@@ -1359,8 +1289,7 @@ bploop:
 ; Clear the output storage
 ;
 	Z = s_video_mem
-	rmp = ' '
-	R0 = rmp
+	r0 = rmp = ' '
 	.loop (rmp = 32)
 		st	Z+, R0
 	.endloop
@@ -1369,14 +1298,10 @@ bploop:
 ;
 .IF cUart
 	rcall UartInit
-	ldi rmp,1<<bUMonU ; monitor U over Uart
-	sUartFlag = rmp
-	rmp = 20 ; 5 seconds
-	sUartMonURpt = rmp ; set repeat default value
-	rmp = 1
-	sUartMonUCnt = rmp
-	rmp = 4 ; 1 seconds
-	sUartMonFCnt = rmp
+	sUartFlag = rmp = 1<<bUMonU ; monitor U over Uart
+	sUartMonURpt = rmp = 20 ; set repeat default value (5 seconds)
+	sUartMonUCnt = rmp = 1
+	sUartMonFCnt = rmp = 4 ; 1 second
 .ENDIF
 ;
 ; Init the LCD
@@ -1385,7 +1310,7 @@ bploop:
 ;
 ; Disable the Analog comparator
 ;
-	ldi rmp,1<<ACD
+	rmp = 1<<ACD
 	out ACSR,rmp
 ;
 ; Disable the external prescaler by 16
@@ -1403,26 +1328,27 @@ bploop:
 	sbi PORTC, 1
 
 	in	rmp, PINC
-	andi	rmp, 3
+	rmp &= 3
 	sEncoderPrev = rmp
 
 ;
 ; Start main interval timer
 ;
+	;rmp = cCmp2				; set Compare Match
 	ldi	rmp, cCmp2				; set Compare Match
 	out	OCR2, rmp
-	ldi	rmp, cPre2|(1<<WGM21)		; CTC mode and prescaler
+	;rmp = cPre2|(1<<WGM21)		; CTC mode and prescaler
+	ldi	rmp, cPre2|(1<<WGM21)
 	out	TCCR2, rmp
 ;
 ; Start timer/counter TC2 interrupts
 ;
-	ldi	rmp, (1<<OCIE2) 			; Interrupt mask
+	rmp = (1<<OCIE2) 			; Interrupt mask
 	out	TIMSK, rmp
 ;
 ; Set initial mode to mode 1
 ;
-	rmp = 1 					; initial mode = 1
-	sModeNext = rmp
+	sModeNext = rmp = 1				; initial mode = 1
 	rcall SetModeNext
 
 	sei 							; enable interrupts
@@ -1451,12 +1377,11 @@ main_loop:
 
 Interval:
 	ZL = sEncoderPrev
-	lsl	ZL
-	lsl	ZL
+	ZL <<= 2
 	in	rmp, PINC
-	andi	rmp, 3
+	rmp &= 3
 	sEncoderPrev = rmp
-	or	ZL, rmp	; encoder value in ZL
+	ZL |= rmp			; encoder value in ZL
 
 	ZH = rMode
 	; 1 7 8 14 -> clockwise
@@ -1480,8 +1405,6 @@ Interval_enc_counterclockwise:
 	ZH--
 Interval_enc_done:
 
-
-
 	sModeNext = ZH 			; store next mode
 	if (rMode == ZH) goto Interval_noChanges
 
@@ -1490,7 +1413,7 @@ Interval_enc_done:
 	rcall delay50ms
 	rcall delay50ms
 	in	rmp, PINC
-	andi	rmp, 3
+	rmp &= 3
 	sEncoderPrev = rmp
 	sei
 	
@@ -1575,7 +1498,7 @@ Interval_noChanges:
 ; Frequency/Time measuring cycle ended, calculate results
 ;
 ;.extern TxtOvf16 : prgptr
-Cycle:
+.proc Cycle
 	sbrc rFlg, bOvf ; check overflow
 	rjmp CycleOvf ; jump to overflow
 	rRes4.rRes3.rRes2.rRes1 = rCpy4.rCpy3.rCpy2.rCpy1		; copy counter
@@ -1590,10 +1513,10 @@ Cycle:
 ; calculate and display result
 	ldi ZH, HIGH(CycleTab) ; point to mode table
 	ldi ZL, LOW(CycleTab)
-	add ZL, rMode ; displace table by mode
-	brcc Cycle1
+	ZL += rMode ; displace table by mode
+	brcc @1
 	ZH++
-Cycle1:
+@1:
 	ijmp ; call the calculation routine
 ; overflow occurred
 CycleOvf:
@@ -1606,6 +1529,7 @@ CycleOvf:
 		st X+, R0
 	.endloop
 	ret
+.endproc	
 ;
 TxtOvf16:
 	.DB "  overflow      "
@@ -1628,45 +1552,10 @@ CycleTab:
 CycleM0:
 	rDiv1 = 0 ; for detecting an overflow in R5
 
-	lsl rRes1 ; * 2
-	rol rRes2
-	rol rRes3
-	rol rRes4
-	rol rDiv1
+	rDiv1.rRes4.rRes3.rRes2.rRes1 <<= 6		; * 64
 	
-	lsl rRes1 ; * 4
-	rol rRes2
-	rol rRes3
-	rol rRes4
-	rol rDiv1
-	
-	lsl rRes1 ; * 8
-	rol rRes2
-	rol rRes3
-	rol rRes4
-	rol rDiv1
-	
-	lsl rRes1 ; * 16
-	rol rRes2
-	rol rRes3
-	rol rRes4
-	rol rDiv1
-	
-	lsl rRes1 ; * 32
-	rol rRes2
-	rol rRes3
-	rol rRes4
-	rol rDiv1
-	
-	lsl rRes1 ; * 64
-	rol rRes2
-	rol rRes3
-	rol rRes4
-	rol rDiv1
-
 	if (rDiv1 == 0) goto CycleM0a ; no error
 	rjmp CycleOvf
-
 	
 CycleM0a:
 	rcall Displ4Dec
@@ -1684,19 +1573,7 @@ CycleM0a:
 ;
 CycleM1:
 	rDiv1 = 0 ; detect overflow in rDiv1
-	
-	lsl rRes1 ; * 2
-	rol rRes2
-	rol rRes3
-	rol rRes4
-	rol rDiv1
-	
-	lsl rRes1 ; * 4
-	rol rRes2
-	rol rRes3
-	rol rRes4
-	rol rDiv1
-
+	rDiv1.rRes4.rRes3.rRes2.rRes1 <<= 2		; * 4
 	if (rDiv1 == 0) goto CycleM1a ; no error
 	rjmp CycleOvf
 CycleM1a:
@@ -1740,41 +1617,19 @@ CycleM3:
 	rcall Divide
 	r0 = 0 ; overflow detection
 	rmp = 0
-	lsl rRes1 ; * 2
-	rol rRes2
-	rol rRes3
-	rol rRes4
-	adc R0,rmp
-	lsl rRes1 ; * 4
-	rol rRes2
-	rol rRes3
-	rol rRes4
-	adc R0,rmp
+	rRes4.rRes3.rRes2.rRes1 <<= 1		; * 2
+	adc r0, rmp
+	rRes4.rRes3.rRes2.rRes1 <<= 1		; * 4
+	adc r0,rmp
 	rDiv4.rDiv3.rDiv2.rDiv1 = rRes4.rRes3.rRes2.rRes1
-;	mov rDiv1,rRes1 ; copy
-;	mov rDiv2,rRes2
-;	mov rDiv3,rRes3
-;	mov rDiv4,rRes4
-	lsl rRes1 ; * 8
-	rol rRes2
-	rol rRes3
-	rol rRes4
-	adc R0,rmp
-	lsl rRes1 ; * 16
-	rol rRes2
-	rol rRes3
-	rol rRes4
-	adc R0,rmp
-	lsl rRes1 ; * 32
-	rol rRes2
-	rol rRes3
-	rol rRes4
-	adc R0,rmp
-	lsl rRes1 ; * 64
-	rol rRes2
-	rol rRes3
-	rol rRes4
-	adc R0,rmp
+	rRes4.rRes3.rRes2.rRes1 <<= 1		; * 8
+	adc r0,rmp
+	rRes4.rRes3.rRes2.rRes1 <<= 1		; * 16
+	adc r0,rmp
+	rRes4.rRes3.rRes2.rRes1 <<= 1		; * 32
+	adc r0,rmp
+	rRes4.rRes3.rRes2.rRes1 <<= 1		; * 64
+	adc r0,rmp
 	if (r0 == 0) goto CycleM3a
 	rjmp CycleOvf
 CycleM3a:
@@ -1855,8 +1710,7 @@ CycleM7a:
 	st Z+, rRes4
 	ret
 CycleM7b: ; overflow
-	rmp = 'P'
-	rjmp PulseOvFlw
+	rjmp PulseOvflw ('P')
 ;
 ; Measure time high and low, display pulse width ratio low in %
 ;   if the edge was negative, store the measured time, if positive calculate
@@ -1868,25 +1722,24 @@ CycleM8:
 	rjmp CycleM8a
 	Z = sCtr		; edge is high, calculate
 	ld rmp,Z+ ; read high-time
-	ld R0, Z+
+	ld r0, Z+
 	ld rDelL, Z+
 	ld rDelH, Z
-	rDiv4.rDiv3.rDiv2.rDiv1 += rDelH.rDelL.R0.rmp		; add to total time
-	rDelH.rDelL.R0.rmp = rRes4.rRes3.rRes2.rRes1
+	rDiv4.rDiv3.rDiv2.rDiv1 += rDelH.rDelL.r0.rmp		; add to total time
+	rDelH.rDelL.r0.rmp = rRes4.rRes3.rRes2.rRes1
 	rcall CalcPw ; calculate the ratio
 	brcs CycleM8b ; error
 	rcall DisplPw ; display the ratio
 	rjmp DisplMode ('p')
 CycleM8a:
 	Z = sCtr
-	st Z+,rRes1 ; copy counter value
-	st Z+,rRes2
-	st Z+,rRes3
-	st Z+,rRes4
+	st	Z+, rRes1 ; copy counter value
+	st	Z+, rRes2
+	st	Z+, rRes3
+	st	Z+, rRes4
 	ret
 CycleM8b: ; overflow
-	rmp = 'p'
-	rjmp	PulseOvFlw
+	rjmp	PulseOvflw ('p')
 ;
 ; Converts an ADC value in R1:R0 to a voltage for display
 ;   cAdc2U  input: ADC value, output: Voltage in V for display
@@ -2046,11 +1899,10 @@ LcdE:
 .args val(rmp)
 	R0 = rmp ; copy rmp
 	swap rmp ; upper nibble to lower nibble
-	andi rmp,0x0F ; clear upper nibble
+	rmp &= 0x0F ; clear upper nibble
 	out PORTB,rmp ; write to display interface
 	rcall LcdE ; pulse E
-	rmp = R0 ; copy original back
-	andi rmp,0x0F ; clear upper nibble
+	rmp = r0 & 0x0F ; copy original back and clear upper nibble
 	out PORTB,rmp ; write to display interface
 	rcall LcdE
 	rmp = R0 ; restore rmp
@@ -2061,16 +1913,15 @@ LcdE:
 ;
 LcdData4:
 	push rmp
-	rmp = R0
+	rmp = r0
 	swap rmp ; upper nibble to lower nibble
-	andi rmp,0x0F ; clear upper nibble
-	sbr rmp,1<<bLcdRs ; set Rs to one
+	rmp &= 0x0F ; clear upper nibble
+	rmp |= 1<<bLcdRs ; set Rs to one
 	out PORTB,rmp ; write to display interface
 	rcall LcdE ; pulse E
-	rmp = r0 ; copy original again
-	andi rmp,0x0F ; clear upper nibble
-	sbr rmp,1<<bLcdRs ; set Rs to one
-	out PORTB,rmp ; write to display interface
+	rmp = r0 & 0x0F ; copy original again and clear upper nibble
+	rmp |= 1<<bLcdRs	; set Rs to one
+	out PORTB, rmp ; write to display interface
 	rcall LcdE
 	rcall Delay40us
 	pop rmp
@@ -2093,7 +1944,7 @@ LcdData4:
 ; Inits the LCD with a 4-bit-interface
 ;
 LcdInit:
-	ldi rmp,0x0F | (1<<bLcdE) | (1<<bLcdRs)
+	rmp = 0x0F | (1<<bLcdE) | (1<<bLcdRs)
 	out DDRB,rmp
 	rmp = 0
 	out PORTB,rmp
@@ -2118,9 +1969,8 @@ LcdInit:
 	rcall delay40us
 	rcall LcdRs4 (0x80)		; position on line 1
 	rcall delay40us ; delay 40 us
-	rmp = 16
 	Z = LcdInitTxt16
-	rcall LcdText
+	rcall LcdText (16)
 
 	;;; !!! TODO memove --------------[
 ;	ldi	rmp, 0xC0 ; line 2
@@ -2187,20 +2037,17 @@ LcdDisplayU:
 .IF cUart
 UartInit: ; Init the Uart on startup
 .EQU cUbrr = (cFreq/cBaud/16)-1 ; calculating UBRR single speed
-	ldi rmp,LOW(sUartRxBs) ; set buffer pointer to start
-	sUartRxBp = rmp
-	ldi rmp,HIGH(cUbrr) ; set URSEL to zero, set baudrate msb
+	sUartRxBp = rmp = LOW(sUartRxBs) ; set buffer pointer to start
+	rmp = HIGH(cUbrr) ; set URSEL to zero, set baudrate msb
 	out UBRRH,rmp
-	ldi rmp,LOW(cUbrr) ; set baudrate lsb
+	rmp = LOW(cUbrr) ; set baudrate lsb
 	out UBRRL,rmp
 	rmp = (1<<URSEL)|(1<<UCSZ1)|(1<<UCSZ0) ; set 8 bit characters
 	out UCSRC,rmp
 	rmp = (1<<RXCIE)|(1<<RXEN)|(1<<TXEN) ; enable RX/TX and RX-Ints
 	out UCSRB, rmp
 	rcall delay10ms ; delay for 10 ms duration
-	;Z = txtUartInit
-	ldi ZH,HIGH(2*txtUartInit)
-	ldi ZL,LOW(2*txtUartInit)
+	Z = txtUartInit
 	rjmp UartSendTxt
 ;
 ; Uart receive buffer space in SRAM
@@ -2230,9 +2077,8 @@ UartInit: ; Init the Uart on startup
 .extern UartReturn : ptr
 
 .proc UartRxLine
-	cbr rFlg,1<<bUartRxLine ; clear line complete flag
-	ldi rmp, LOW(sUartRxBs) ; set buffer pointer to start
-	sUartRxBp = rmp
+	cbr rFlg, 1<<bUartRxLine ; clear line complete flag
+	sUartRxBp = rmp = LOW(sUartRxBs) ; set buffer pointer to start
 	Z = UartReturn
 	push ZL ZH
 	Z = sUartRxBs
@@ -2281,14 +2127,14 @@ UartMonUSetC1:
 	sUartMonURpt = r0
 	sUartMonUCnt = r0
 UartMonUSetC2:
-	sbr rmp,1<<bUMonU ; set flag
+	rmp |= 1<<bUMonU ; set flag
 	sUartFlag = rmp
 	Z = txtUartUOn
 	ret
 UartMonFSetC:
 	rmp = sUartFlag
 	brcs UartMonFSetC1
-	cbr rmp,1<<bUMonF ; clear flag
+	cbr rmp, 1<<bUMonF ; clear flag
 	sUartFlag = rmp
 	Z = txtUartFOff
 	ret
@@ -2297,7 +2143,7 @@ UartMonFSetC1:
 	sUartMonFRpt = r0
 	sUartMonFCnt = r0
 UartMonFSetC2:
-	sbr rmp,1<<bUMonF ; set flag
+	rmp |= 1<<bUMonF ; set flag
 	sUartFlag = rmp
 	Z = txtUartFOn
 	ret
@@ -2320,25 +2166,25 @@ UartMonPar:
 .proc UartGetPar
 	r0 = 0 ; result register
 	ld rmp, Z+ ; read char
-	if (rmp == cCr) goto @NoPar
-	if (rmp == cLf) goto @NoPar
+	if (rmp == cCR) goto @NoPar
+	if (rmp == cLF) goto @NoPar
 	if (rmp != '=') goto @Err
 @1:
 	; rmp = $data[Z++]
 	ld rmp, Z+ ; read next char
-	if (rmp == cCr) goto @2
-	if (rmp == cLf) goto @2
+	if (rmp == cCR) goto @2
+	if (rmp == cLF) goto @2
 	rmp -= '0'
 	brcs @Err
 	if (rmp >= 10) goto @Err
 	rir = r0
-	lsl r0 ; * 2
+	r0 <<= 1 ; * 2
 	brcs @Err
-	lsl r0 ; * 4
+	r0 <<= 1 ; * 4
 	brcs @Err
 	r0 += rir ; * 5
 	brcs @Err
-	lsl R0 ; * 10
+	r0 <<= 1 ; * 10
 	brcs @Err
 	r0 += rmp ; add new decimal
 	brcs @Err
@@ -2363,7 +2209,7 @@ UartMonPar:
 	rcall @N
 	pop	val
 @N:
-	andi val, 0x0F
+	val &= 0x0F
 	val += '0'
 	if (val < '9'+1) goto @N1
 	val += 7
@@ -2393,17 +2239,15 @@ UartReturn:
 ;
 UartMonU:
 	rmp = sUartFlag ; flag register for Uart
-	sbrs rmp,bUMonU ; displays voltage over Uart
+	sbrs rmp, bUMonU ; displays voltage over Uart
 	ret
-	rmp = sUartMonUCnt - 1 ; read counter
-	sUartMonUCnt = rmp
+	sUartMonUCnt = rmp = sUartMonUCnt - 1 ; read counter
 	brne UartMonU2
-	rmp = sUartMonURpt
-	sUartMonUCnt = rmp
+	sUartMonUCnt = rmp = sUartMonURpt
 	Z = s_video_mem + 16
 	.loop (rmp = 8)
 UartMonU1:
-		sbis UCSRA,UDRE ; wait for empty buffer
+		sbis UCSRA, UDRE ; wait for empty buffer
 		rjmp UartMonU1
 		ld R0,Z+
 		out UDR,R0
@@ -2419,11 +2263,9 @@ UartMonF:
 	rmp = sUartFlag ; flag register for Uart
 	sbrs rmp, bUMonF ; displays frequency over Uart
 	ret
-	rmp = sUartMonFCnt - 1	; read counter
-	sUartMonFCnt = rmp
+	sUartMonFCnt = rmp = sUartMonFCnt - 1	; read counter
 	brne UartMonF2
-	rmp = sUartMonFRpt
-	sUartMonFCnt = rmp
+	sUartMonFCnt = rmp = sUartMonFRpt
 	Z = s_video_mem
 	.loop (rmp = 16)
 	UartMonF1:
