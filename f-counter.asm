@@ -1912,12 +1912,12 @@ LcdE:
 ; write rmp as data over 4-bit-interface to the LCD
 ;
 LcdData4:
-	push rmp
+	push	rmp
 	rmp = r0
-	swap rmp ; upper nibble to lower nibble
+	swap	rmp ; upper nibble to lower nibble
 	rmp &= 0x0F ; clear upper nibble
 	rmp |= 1<<bLcdRs ; set Rs to one
-	out PORTB,rmp ; write to display interface
+	out	PORTB, rmp ; write to display interface
 	rcall LcdE ; pulse E
 	rmp = r0 & 0x0F ; copy original again and clear upper nibble
 	rmp |= 1<<bLcdRs	; set Rs to one
@@ -2084,70 +2084,70 @@ UartInit: ; Init the Uart on startup
 	Z = sUartRxBs
 	ld rmp, Z+ ; read first character
 	if (rmp != 'h') goto @1		; help?
-	rjmp UartHelp
+	rjmp @help
 @1:
 	if (rmp != '?') goto @2		; help?
-	rjmp UartHelp
+	rjmp @help
 @2:
 	if (rmp != 'U') goto @3		; monitor U on
 	rcall UartGetPar
 	sec
-	rjmp UartMonUSetC
+	rjmp @USetC
 @3:
 	if (rmp != 'u') goto @4		; monitor U off
 	clc
-	rjmp UartMonUSetC
+	rjmp @USetC
 @4:
 	if (rmp != 'F') goto @5		; monitor F on
 	rcall UartGetPar
 	sec
-	rjmp UartMonFSetC
+	rjmp @FSetC
 @5:
 	if (rmp != 'f') goto @6		; monitor f off
 	clc
-	rjmp UartMonFSetC
+	rjmp @FSetC
 @6:
 	if (rmp != 'p') goto @7		; parameter?
-	rjmp UartMonPar
+	rjmp @param
 @7:
 	Z = txtUartUnknown
 	ret
-UartHelp:
+@help:
 	Z = txtUartHelp
 	ret
-UartMonUSetC:
+@USetC:
 	rmp = sUartFlag
-	brcs UartMonUSetC1
+	brcs @USetC1
 	cbr rmp,1<<bUMonU ; clear flag
 	sUartFlag = rmp
 	Z = txtUartUOff
 	ret
-UartMonUSetC1:
-	brne UartMonUSetC2
+@USetC1:
+	brne @USetC2
 	sUartMonURpt = r0
 	sUartMonUCnt = r0
-UartMonUSetC2:
+@USetC2:
 	rmp |= 1<<bUMonU ; set flag
 	sUartFlag = rmp
 	Z = txtUartUOn
 	ret
-UartMonFSetC:
+@FSetC:
 	rmp = sUartFlag
-	brcs UartMonFSetC1
+	brcs @FSetC1
 	cbr rmp, 1<<bUMonF ; clear flag
 	sUartFlag = rmp
 	Z = txtUartFOff
 	ret
-UartMonFSetC1:
-	brne UartMonFSetC2
+@FSetC1:
+	brne @FSetC2
 	sUartMonFRpt = r0
 	sUartMonFCnt = r0
-UartMonFSetC2:
+@FSetC2:
 	rmp |= 1<<bUMonF ; set flag
 	sUartFlag = rmp
 	Z = txtUartFOn
 	ret
-UartMonPar:
+@param:
 	Z = txtUartNul
 	rcall UartSendChar ('U')
 	rcall UartSendChar ('=')
@@ -2166,8 +2166,8 @@ UartMonPar:
 .proc UartGetPar
 	r0 = 0 ; result register
 	ld rmp, Z+ ; read char
-	if (rmp == cCR) goto @NoPar
-	if (rmp == cLF) goto @NoPar
+	if (rmp == cCR) goto @noParam
+	if (rmp == cLF) goto @noParam
 	if (rmp != '=') goto @Err
 @1:
 	; rmp = $data[Z++]
@@ -2195,7 +2195,7 @@ UartMonPar:
 @Err:
 	Z = txtUartErr
 	rcall UartSendTxt
-@NoPar:
+@noParam:
 	clz ; No parameter set
 	ret
 .endproc
@@ -2249,8 +2249,8 @@ UartMonU:
 UartMonU1:
 		sbis UCSRA, UDRE ; wait for empty buffer
 		rjmp UartMonU1
-		ld R0,Z+
-		out UDR,R0
+		ld	R0,Z+
+		out	UDR,R0
 	.endloop
 	rcall UartSendChar (cCR)
 	rjmp UartSendChar (cLF)
@@ -2259,25 +2259,26 @@ UartMonU2:
 ;
 ; Monitor frequency over UART
 ;
-UartMonF:
+.proc UartMonF
 	rmp = sUartFlag ; flag register for Uart
 	sbrs rmp, bUMonF ; displays frequency over Uart
 	ret
 	sUartMonFCnt = rmp = sUartMonFCnt - 1	; read counter
-	brne UartMonF2
+	brne @ret
 	sUartMonFCnt = rmp = sUartMonFRpt
 	Z = s_video_mem
 	.loop (rmp = 16)
-	UartMonF1:
+@continue:
 		sbis UCSRA, UDRE ; wait for empty buffer
-		rjmp UartMonF1
-		ld R0, Z+
-		out UDR, R0
+		rjmp @continue
+		ld	R0, Z+
+		out	UDR, R0
 	.endloop
 	rcall UartSendChar (cCR)
 	rjmp UartSendChar (cLF)
-UartMonF2:
+@ret:
 	ret
+.endproc
 ;
 ; Send text from flash to UART, null byte ends transmit
 ;
