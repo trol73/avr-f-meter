@@ -578,7 +578,7 @@ SetModeF:
 	ldi rmp,0xFF ; disable the compare match B
 	out OCR1BH,rmp
 	out OCR1BL,rmp
-	ldi rmp,0 ; CTC mode
+	ldi rmp, 0 ; CTC mode
 	out TCCR1A,rmp
 	ldi rmp,cPre1F ; set the prescaler value for TC1
 	out TCCR1B,rmp

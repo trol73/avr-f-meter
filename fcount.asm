@@ -614,7 +614,7 @@ SetModeF:
 	ldi	rmp, 0xFF 		; disable the compare match B
 	out	OCR1BH, rmp
 	out	OCR1BL, rmp
-	ldi	rmp, 0 			; CTC mode
+	clr	rmp	 			; CTC mode
 	out	TCCR1A, rmp
 	ldi	rmp, cPre1F 		; set the prescaler value for TC1
 	out	TCCR1B, rmp
@@ -628,7 +628,7 @@ SetModeF:
 ;
 SetModeT:
 	sbi	pPresc, bPresc 				; disable prescaler
-	ldi	rmp, 0 						; timing mode
+	clr	rmp	 						; timing mode
 	out	TCCR1A, rmp
 	ldi	rmp, 1<<CS10 					; count with prescaler = 1
 	out	TCCR1B, rmp
@@ -644,7 +644,7 @@ SetModeT:
 ;
 SetModeE:
 	sbi pPresc, bPresc ; disable prescaler
-	ldi rmp, 0 ; timing mode
+	clr rmp	 ; timing mode
 	out TCCR1A,rmp
 	ldi rmp, 1<<CS10 ; count with prescaler = 1
 	out TCCR1B,rmp
@@ -2218,8 +2218,9 @@ LcdData4:
 ; characters in rmp
 ;
 LcdText:
-	lpm						; read character from flash
-	adiw		ZL, 1
+	;lpm						; read character from flash
+	;adiw		ZL, 1
+	lpm	r0, Z+
 	rcall	LcdData4 			; write to 
 	rcall	delay40us
 	dec		rmp
