@@ -397,10 +397,10 @@ Int0Int1: 				; 4/11
 ;   the result registers and clears TC0
 ;
 Tc1CmpAInt:
-	in	rSreg, SREG 		; 1, save SREG
+	rSreg = io[SREG] 		; 1, save SREG
 	sbrc	rFlg, bCyc 		; 2/3, check if cycle flag signals ok for copy
 	rjmp TC1CmpAInt1 		; 4, no, last result hasn't been read
-	in	rCpy1, TCNT0 		; 4, read counter TC0
+	rCpy1 = io[TCNT0] 		; 4, read counter TC0
 	rCpy2 = rCtr1			; 5, copy counter bytes to result
 	rCpy3 = rCtr2 			; 6
 	rCpy4 = rCtr3 			; 7
@@ -411,7 +411,7 @@ Tc1CmpAInt1: 				; 4/8
 	rCtr1 = rimp 			; 7/11, clear counter bytes
 	rCtr2 = rimp 			; 8/12
 	rCtr3 = rimp 			; 9/13
-	out	SREG, rSreg 		; 10/14, restore SREG
+	io[SREG] = rSreg 		; 10/14, restore SREG
 	reti ; 			14/18
 ;
 ; TC1 Overflow Interrupt Service Routine
@@ -419,31 +419,31 @@ Tc1CmpAInt1: 				; 4/8
 ;   increases the upper bytes and detects overflows
 ;
 Tc1OvfInt:
-	in	rSreg, SREG 			; 1, save SREG
-	rCtr2 ++					; 2, increase byte 3 of the counter
+	rSreg = io[SREG] 			; 1, save SREG
+	rCtr2++					; 2, increase byte 3 of the counter
 	brne	Tc1OvfInt1 			; 3/4, no overflow
 	rCtr3++					; 4, increase byte 4 of the counter
 	brne	Tc1OvfInt1 			; 5/6, no overflow
 	rFlg |= (1<<bOvf)|(1<<bCyc) ; 6, set overflow and end of cycle bit
-Tc1OvfInt1: 				; 4/6
-	out	SREG, rSreg 			; 5/7, restore SREG
-	reti					; 9/11
+Tc1OvfInt1: 					; 4/6
+	io[SREG] = rSreg 			; 5/7, restore SREG
+	reti						; 9/11
 ;
 ; TC0 Overflow Interrupt Service Routine
 ;   active in modes 0 and 1 counting positive edges on T1
 ;   increases the upper bytes and detects overflows
 ;
 Tc0OvfInt:
-	in	rSreg, SREG 			; 1, save SREG
-	rCtr1 ++		 			; 2, increase byte 2 of the counter
+	rSreg = io[SREG] 			; 1, save SREG
+	rCtr1++		 			; 2, increase byte 2 of the counter
 	brne	Tc0OvfInt1 			; 3/4, no overflow
-	rCtr2 ++	 				; 4, increase byte 3 of the counter
+	rCtr2++	 				; 4, increase byte 3 of the counter
 	brne	Tc0OvfInt1 			; 5/6, no overflow
-	rCtr3 ++					; 6, increase byte 4 of the counter
+	rCtr3++					; 6, increase byte 4 of the counter
 	brne	Tc0OvfInt1 			; 7/8, no overflow
 	rFlg |= (1<<bOvf)|(1<<bCyc)   ; 8, set overflow bit
 Tc0OvfInt1: 				; 4/6/8
-	out	SREG, rSreg 			; 5/7/9, restore SREG
+	io[SREG] = rSreg 			; 5/7/9, restore SREG
 	reti 					; 9/11/13
 ;
 ; Uart RxC Interrupt Service Routine
@@ -454,28 +454,28 @@ Tc0OvfInt1: 				; 4/6/8
 ;
 .IF cUart
 SioRxCIsr:
-	in	rSreg, SREG 					; 1, Save SReg
-	in	rimp, UCSRA 					; 2, Read error flags
+	rSreg = io[SREG] 					; 1, Save SReg
+	rimp = io[UCSRA] 					; 2, Read error flags
 	rimp &= (1<<FE)|(1<<DOR)|(1<<PE) 	; 3, isolate error bits
-	in	rimp, UDR 					; 4, read character from UART
+	rimp = io[UDR] 					; 4, read character from UART
 	breq SioRxCIsr1 					; 5/6, no errors
-	rimp =  '*'						; 6, signal an error
-	out	UDR, rimp						; 7
+	rimp = '*'						; 6, signal an error
+	io[UDR] = rimp						; 7
 	rjmp	SioRxCIsr4 					; 9, return from int
 SioRxCIsr1: 							; 6
-	out	UDR, rimp						; 7, echo the character
+	io[UDR] = rimp						; 7, echo the character
 	push	ZH ZL 						; 9, 11, Save Z register
-	ldi	ZH, HIGH(sUartRxBs) 			; 12, Load Position for next RX char
-	lds	ZL, sUartRxBp 					; 14
-	st	Z+, rimp 						; 16, save char in buffer
+	ZH = HIGH(sUartRxBs) 			; 12, Load Position for next RX char
+	ZL = sUartRxBp 					; 14
+	ram[Z++] = rimp					; 16, save char in buffer
 	cpi	ZL, LOW(sUartRxBe+1) 			; 17, End of buffer?
 	brcc SioRxCIsr2 					; 18/19, Buffer overflow
-	sts	sUartRxBp, ZL 					; 20, Save next pointer position
+	sUartRxBp = ZL 					; 20, Save next pointer position
 SioRxCIsr2: 							; 19/20
 	cpi	rimp, cCR 					; 20/21, Carriage Return?
 	brne SioRxCIsr3 					; 21/22/23, No, go on
-	ldi	rimp, cLF 					; 22/23, Echo linefeed
-	out	UDR, rimp 					; 23/24
+	rimp = cLF	 					; 22/23, Echo linefeed
+	io[UDR] = rimp 					; 23/24
 	rFlg |= (1<<bUartRxLine) 			; 24/25, Set line complete flag
 	rjmp	SioRxCIsr3a
 SioRxCIsr3: 							; 22/23/24/25
@@ -485,7 +485,7 @@ SioRxCIsr3: 							; 22/23/24/25
 SioRxCIsr3a:
 	pop	ZL ZH						; 24/25/26/27, 26/27/28/29, restore Z-register
 SioRxCIsr4:							; 9/26/27/28/29
-	out	SREG, rSreg					; 10/27/28/29/30, restore SREG
+	io[SREG] = rSreg					; 10/27/28/29/30, restore SREG
 	reti								; 14/31/32/33/34, return from Int
 .ENDIF
 ;
@@ -664,7 +664,7 @@ ClrTc:
 ;
 .proc Divide
 	rmp = 0 ; rmp:R0:ZH:ZL:XH:XL is divisor
-	R0 = 0
+	r0 = 0
 	ZH = 0
 	ZL = BYTE3(cFreq/256) ; set divisor
 	XH = BYTE2(cFreq/256)
@@ -724,7 +724,7 @@ ClrTc:
 	rjmp @1
 @4:
 	rmp = 128 ; round result
-	R0 = 0
+	r0 = 0
 	ZH.ZL.rDiv4.rDiv3.rDiv2 += r0.r0.r0.r0.rmp
 	rRes4.rRes3.rRes2.rRes1 = ZH.ZL.rDiv4.rDiv3
 	ret
@@ -774,10 +774,7 @@ CalcPwO: ; overflow
 	sec
 	ret
 .proc CalcPw
-	rRes1 = rmp ; copy active cycle time to rRes
-	rRes2 = R0
-	rRes3 = rDelL
-	rRes4 = rDelH
+	rRes4.rRes3.rRes2.rRes1 = rDelH.rDelL.r0.rmp		; copy active cycle time to rRes
 	rRes4.rRes3.rRes2.rRes1 <<= 1		; * 2
 	brcs CalcPwO ; overflow
 	rRes4.rRes3.rRes2.rRes1 <<= 1		; * 4
@@ -822,11 +819,7 @@ CalcPwO: ; overflow
 	rol rRes3
 	rol rRes4
 	brcc @1 ; roll on
-	lsl rDelL ; round result
-	rol XL
-	rol XH
-	rol ZL
-	rol ZH
+	ZH.ZL.XH.XL.rDelL <<= 1	; round result
 	if (ZH.ZL.XH.XL < rDiv4.rDiv3.rDiv2.rDiv1) goto @4
 	rmp = 1 ; round up
 	rRes1 += rmp
@@ -856,11 +849,9 @@ DisplPw:
 	ram[X++] = rmp = ' '
 	ram[X++] = rmp
 	r0 = 0
-	Z = 1000
-	rcall DisplDecX2
-	Z = 100
-	rcall	DisplDecX2
-	ZL = 10
+	rcall	DisplDecX2 (1000)
+	rcall	DisplDecX2 (100)
+	ZL = 10	
 	r0++
 	rcall DisplDecX2
 	ram[X++] = rmp = cDecSep
@@ -912,10 +903,10 @@ DisplPw:
 	if (rmp != 0) goto @3
 	if (r0 != 0) goto @3
 	rmp = ' ' ; suppress leading zero
-	rjmp @4
+	rjmp @end
 @3:
 	rmp += '0'
-@4:
+@end:
 	ram[X++] = rmp
 	ret	
 .endproc	
@@ -928,10 +919,8 @@ DisplPw:
 	ram[X++] = rmp
 
 	r0 = 0
-	Z = 10000
-	rcall DisplDecY2
-	Z = 1000
-	rcall DisplDecY2
+	rcall DisplDecY2 (10000)
+	rcall DisplDecY2 (1000)
 
 	rmp = c1kSep
 	if (r0 != 0) goto @0
@@ -941,7 +930,7 @@ DisplPw:
 
 	rcall DisplDecY1 (val: 100)
 	rcall DisplDecY1 (val: 10)
-	ram[X++] = rmp = '0' + R2
+	ram[X++] = rmp = '0' + r2
 	
 	if (r1 != 0) goto @1
 	ram[X++] = rmp = ' '
@@ -961,13 +950,10 @@ DisplPw:
 		rRes3 = 0
 		rRes2 = 0
 		r0 = rRes1 ; * 1
-		lsl	rRes1 ; * 2
-		adc	rRes2, rRes3
-		lsl	rRes1 ; * 4
-		rol	rRes2
+		rRes2.rRes1 += rRes3.rRes1	; *2
+		rRes2.rRes1 <<= 1	; *4
 		rRes2.rRes1 += rRes3.r0
-		lsl	rRes1 ; * 10
-		rol	rRes2
+		rRes2.rRes1 <<= 1	; *10
 		
 		ram[X++] = rmp = '0' + rRes2
 	.endloop
@@ -982,14 +968,15 @@ DisplPw:
 ; Convert a decimal in R4:R3:R2, decimal in ZH:ZL
 ;
 .proc DisplDecY2
+.args val(Z)
 	rDiv1 = 0 ; rDiv1 is counter
 	rDiv2 = 0 ; overflow byte
-@a:
-	if (rRes4.rRes3.rRes2 < rDiv2.ZH.ZL) goto @b ; ended
+@loop:
+	if (rRes4.rRes3.rRes2 < rDiv2.ZH.ZL) goto @break
 	rRes4.rRes3.rRes2 -= rDiv2.ZH.ZL
 	rDiv1++
-	rjmp @a
-@b:
+	rjmp @loop
+@break:
 	rmp = '0' + rDiv1
 	r0 += rDiv1
 	if (r0 != 0) goto @c
@@ -1005,12 +992,12 @@ DisplPw:
 .args val(ZL)
 	rDiv1 = 0 ; rDiv1 is counter
 	rDiv2 = 0 ; overflow byte
-@a:
-	if (rRes3.rRes2 < rDiv2.ZL) goto @b ; ended
+@loop:
+	if (rRes3.rRes2 < rDiv2.ZL) goto @break
 	rRes3.rRes2 -= rDiv2.ZL
 	rDiv1++
-	rjmp @a
-@b:
+	rjmp @loop
+@break:
 	rmp = '0' + rDiv1
 	r0 += rDiv1
 	if (r0 != 0) goto @c
@@ -1042,10 +1029,8 @@ DisplPw:
 	ram[X++] = rmp = ' '	; clear the first two digits
 	ram[X++] = rmp
 
-	ZH.ZL.rmp = 10000000	; 10 mio
-	rcall DisplDecX3
-	ZH.ZL.rmp = 1000000		; 1 mio
-	rcall DisplDecX3
+	rcall DisplDecX3 (10000000)	; 10 m
+	rcall DisplDecX3 (1000000)	; 1 mio
 
 	rmp = c1kSep ; set separator
 	if (r0 != 0) goto @2
@@ -1053,12 +1038,9 @@ DisplPw:
 @2:
 	ram[X++] = rmp
 
-	ZH.ZL.rmp = 100000	; 100 k
-	rcall DisplDecX3
-	Z = 10000			; 10 k
-	rcall DisplDecX2
-	Z = 1000			; 1 k
-	rcall DisplDecX2
+	rcall DisplDecX3 (100000)	; 100 k
+	rcall DisplDecX2 (10000)		; 10 k
+	rcall DisplDecX2 (1000)		; 1 k
 
 	rmp = c1kSep ; set separator
 	if (r0 != 0) goto @3
@@ -1074,14 +1056,15 @@ DisplPw:
 ; Convert a decimal in R3:R2:R1, decimal in ZH:ZL:rmp
 ;
 .proc DisplDecX3
+.args val(ZH.ZL.rmp)
 	rDiv1 = 0 ; rDiv1 is counter
 	rDiv2 = 0 ; subtractor for byte 4
-@a:
-	if (rRes4.rRes3.rRes2.rRes1 < rDiv2.ZH.ZL.rmp) goto @b ; ended
+@loop:
+	if (rRes4.rRes3.rRes2.rRes1 < rDiv2.ZH.ZL.rmp) goto @break
 	rRes4.rRes3.rRes2.rRes1 -= rDiv2.ZH.ZL.rmp
 	rDiv1++
-	rjmp @a
-@b:
+	rjmp @loop
+@break:
 	rmp = '0' + rDiv1
 	r0 += rDiv1
 	if (r0 != 0) goto @c
@@ -1094,14 +1077,15 @@ DisplPw:
 ; Convert a decimal in R3:R2:R1, decimal in ZH:ZL
 ;
 .proc DisplDecX2
+.args val(Z)
 	rDiv1 = 0 ; rDiv1 is counter
 	rDiv2 = 0 ; next byte overflow
-@a:
-	if (rRes3.rRes2.rRes1 < rDiv2.ZH.ZL) goto @b		; ended
+@loop:
+	if (rRes3.rRes2.rRes1 < rDiv2.ZH.ZL) goto @break
 	rRes3.rRes2.rRes1 -= rDiv2.ZH.ZL
 	rDiv1++
-	rjmp @a
-@b:
+	rjmp @loop
+@break:
 	rmp = '0' + rDiv1
 	r0 += rDiv1
 	if (r0 != 0) goto @c
@@ -1117,12 +1101,12 @@ DisplPw:
 .args val(ZL)
 	rDiv1 = 0 ; rDiv1 is counter
 	rDiv2 = 0 ; next byte overflow
-@a:
-	if (rRes2.rRes1 < rDiv2.ZL) goto @b ; ended
+@loop:
+	if (rRes2.rRes1 < rDiv2.ZL) goto @break
 	rRes2.rRes1 -= rDiv2.ZL
 	rDiv1 ++
-	rjmp @a
-@b:
+	rjmp @loop
+@break:
 	rmp = '0' + rDiv1
 	r0 += rDiv1
 	if (r0 != 0) goto @c
@@ -1137,33 +1121,24 @@ DisplPw:
 ;=================================================
 ;
 Delay50ms:
-	rDelH.rDelL = 50000 
-	rjmp DelayZ
+	rjmp DelayZ (50000)
 Delay10ms:
-	rDelH.rDelL = 10000 
-	rjmp DelayZ
+	rjmp DelayZ (10000)
 Delay15ms:
-	rDelH.rDelL = 15000 
-	rjmp DelayZ
+	rjmp DelayZ (15000)
 Delay4_1ms:
-	rDelH.rDelL = 4100 
-	rjmp DelayZ
+	rjmp DelayZ (4100)
 Delay1_64ms:
-	rDelH.rDelL = 1640
-	rjmp DelayZ
+	rjmp DelayZ (1640)
 Delay100us:
-	;rDelH.rDelL = 100
-	rDelH = 0
-	rDelL = 100
-	rjmp DelayZ
+	rjmp DelayZ (100)
 Delay40us:
-	clr rDelH
-	ldi rDelL,40
-	rjmp DelayZ
+	rjmp DelayZ (40)
 ;
 ; Delays execution for Z microseconds
 ;
-DelayZ:
+.proc DelayZ
+.args ms(rDelH.rDelL)
 .IF cFreq>18000000
 	nop
 	nop
@@ -1199,6 +1174,7 @@ DelayZ:
 	rDelH.rDelL -= 1
 	brne DelayZ ; 2
 	ret
+.endproc
 ;
 ; =========================================
 ; Main Program Start
@@ -1259,46 +1235,30 @@ bploop:
 	sUartMonUCnt = rmp = 1
 	sUartMonFCnt = rmp = 4 ; 1 second
 .ENDIF
-;
-; Init the LCD
-;
-	rcall LcdInit
-;
-; Disable the Analog comparator
-;
-	io[ACSR] = rmp = 1<<ACD
-;
-; Disable the external prescaler by 16
-;
+
+	rcall LcdInit					; Init the LCD
+	
+	io[ACSR] = rmp = 1<<ACD			; Disable the Analog comparator
+
+	; Disable the external prescaler by 16
 	io[pPrescD].bPresc = 1			; set prescaler port bit to output
 	io[pPresc].bPresc = 1			; disable the prescaler
-;
 
-;
-; Init encoder
-;
+	; Init encoder
 	io[DDRC].0 = 0
 	io[DDRC].1 = 0
 	io[PORTC].0 = 1
 	io[PORTC].1 = 1
 
 	sEncoderPrev = rmp = io[PINC] & 3
-;
-; Start main interval timer
-;
+	
+	; Start main interval timer
 	io[OCR2] = rmp = cCmp2				; set Compare Match
-	io[TCCR2] = rmp = cPre2|(1<<WGM21)		; CTC mode and prescaler
-;
-; Start timer/counter TC2 interrupts
-	;
-	io[TIMSK] = rmp = (1<<OCIE2) 			; Interrupt mask
-;
-; Set initial mode to mode 1
-;
-	sModeNext = rmp = 1				; initial mode = 1
+	io[TCCR2] = rmp = cPre2 | (1<<WGM21)	; CTC mode and prescaler
+	io[TIMSK] = rmp = (1<<OCIE2) 			; Start timer/counter TC2 interrupts
+	sModeNext = rmp = 1					; Set initial mode to mode 1
 	rcall SetModeNext
-
-	sei 							; enable interrupts
+	sei 								; enable interrupts
 ;
 ; --------[main loop] start --------------------
 main_loop:
@@ -1322,7 +1282,7 @@ main_loop:
 
 
 
-Interval:
+.proc Interval
 	ZL = sEncoderPrev
 	ZL <<= 2
 	sEncoderPrev = rmp = io[PINC] & 3
@@ -1330,28 +1290,28 @@ Interval:
 
 	ZH = rMode
 	; 1 7 8 14 -> clockwise
-	if (ZL == 1) goto Interval_enc_clockwise
-	if (ZL == 7) goto Interval_enc_clockwise
-	if (ZL == 8) goto Interval_enc_clockwise
-	if (ZL == 14) goto Interval_enc_clockwise
+	if (ZL == 1) goto @clockwise
+	if (ZL == 7) goto @clockwise
+	if (ZL == 8) goto @clockwise
+	if (ZL == 14) goto @clockwise
 	; 2 4 11 13 -> counterclockwise
-	if (ZL == 2) goto Interval_enc_counterclockwise
-	if (ZL == 4) goto Interval_enc_counterclockwise
-	if (ZL == 11) goto Interval_enc_counterclockwise
-	if (ZL == 13) goto Interval_enc_counterclockwise
-	rjmp	Interval_noChanges
-Interval_enc_clockwise:
+	if (ZL == 2) goto @counterclockwise
+	if (ZL == 4) goto @counterclockwise
+	if (ZL == 11) goto @counterclockwise
+	if (ZL == 13) goto @counterclockwise
+	rjmp	@noChanges
+@clockwise:
 	ZH++
-	if (ZH < 9) goto Interval_enc_done
+	if (ZH < 9) goto @done
 	ZH = 8			; set to 9
-	rjmp Interval_enc_done
-Interval_enc_counterclockwise:
-	if (ZH == 0) goto Interval_enc_done
+	rjmp @done
+@counterclockwise:
+	if (ZH == 0) goto @done
 	ZH--
-Interval_enc_done:
+@done:
 
 	sModeNext = ZH 			; store next mode
-	if (rMode == ZH) goto Interval_noChanges
+	if (rMode == ZH) goto @noChanges
 
 	; delay for 100 ms duration
 	cli
@@ -1361,74 +1321,9 @@ Interval_enc_done:
 	sei
 	
 	rcall SetModeNext ; start new mode
-Interval_noChanges:
+@noChanges:
 
 
-;.IF 0
-;
-;
-;
-;
-;Interval:
-;	lds	ZL, sEncoderPrev
-;	lsl	ZL
-;	lsl	ZL
-;	in	rmp, PINC
-;	andi	rmp, 3
-;	sts	sEncoderPrev, rmp
-;	or	ZL, rmp	; encoder value in ZL
-;
-;	mov	ZH, rMode
-;	; 1 7 8 14 -> clockwise
-;	cpi	ZL, 1
-;	breq	Interval_enc_clockwise
-;	cpi	ZL, 7
-;	breq	Interval_enc_clockwise
-;	cpi	ZL, 8
-;	breq	Interval_enc_clockwise
-;	cpi	ZL, 14
-;	breq	Interval_enc_clockwise
-;	; 2 4 11 13 -> counterclockwise
-;	cpi	ZL, 2
-;	breq	Interval_enc_counterclockwise
-;	cpi	ZL, 4
-;	breq	Interval_enc_counterclockwise
-;	cpi	ZL, 11
-;	breq	Interval_enc_counterclockwise	
-;	cpi	ZL, 13
-;	breq	Interval_enc_counterclockwise	
-;	rjmp	Interval_enc_done
-;Interval_enc_clockwise:
-;	inc	ZH
-;	cpi	ZH, 8
-;	brcs	Interval_enc_done	; jump if ZH <= 8
-;	ldi 	ZH, 8			; set to 8
-;	rjmp Interval_enc_done
-;Interval_enc_counterclockwise:
-;	tst  ZH
-;	breq Interval_enc_done	; jump if ZH = 0
-;	dec  ZH
-;Interval_enc_done:
-;
-;
-;	sts	sModeNext, ZH 			; store next mode
-;	cp	rMode, ZH				; new mode?
-;	breq Interval_noChanges		; continue current mode
-;	cli
-;	rcall SetModeNext 		; start new mode
-;
-;	; delay for 100 ms duration
-;
-;	rcall delay50ms
-;	rcall delay50ms
-;	in	rmp, PINC
-;	andi	rmp, 3
-;	sts  sEncoderPrev, rmp
-;	sei
-;	
-;;	rcall SetModeNext 		; start new mode
-;Interval_noChanges:
-;.ENDIF
 ;	rcall cAdc2U 			; convert to text
 	rcall LcdDisplayFT
 	rcall LcdDisplayU
@@ -1437,6 +1332,7 @@ Interval_noChanges:
 	rcall UartMonU
 .ENDIF
 	ret
+.endproc	
 ;
 ; Frequency/Time measuring cycle ended, calculate results
 ;
@@ -1457,9 +1353,9 @@ Interval_noChanges:
 	ldi ZH, HIGH(CycleTab) ; point to mode table
 	ldi ZL, LOW(CycleTab)
 	ZL += rMode ; displace table by mode
-	brcc @1
+	brcc @not_inc
 	ZH++
-@1:
+@not_inc:
 	ijmp ; call the calculation routine
 ; overflow occurred
 CycleOvf:
@@ -1468,7 +1364,7 @@ CycleOvf:
 	Z = TxtOvf16		; point to long message
 	.loop (rmp = 16):
 		r0 = prg[Z]
-		Z ++		; TODO !!! use [Z++]
+		Z++		; TODO !!! use [Z++]
 		ram[X++] = r0
 	.endloop
 	ret
@@ -1492,46 +1388,48 @@ CycleTab:
 ;
 ; Mode 0: Measured prescaled frequency, display frequency
 ;
-CycleM0:
+.proc CycleM0
 	rDiv1 = 0 ; for detecting an overflow in R5
-
 	rDiv1.rRes4.rRes3.rRes2.rRes1 <<= 6		; * 64
 	
-	if (rDiv1 == 0) goto CycleM0a ; no error
+	if (rDiv1 == 0) goto @ok
 	rjmp CycleOvf
 	
-CycleM0a:
+@ok:
 	rcall Displ4Dec
 	ram[X++] = rmp = ' '
 	ram[X++] = rmp = 'H'
 	ram[X++] = rmp = 'z'
 	ram[X] = rmp = ' '
 	rjmp DisplMode ('F')
+.endproc
+
 ;
 ; Mode 1: Frequency measured, prescale = 1, display frequency
 ;
-CycleM1:
+.proc CycleM1
 	rDiv1 = 0 ; detect overflow in rDiv1
 	rDiv1.rRes4.rRes3.rRes2.rRes1 <<= 2		; * 4
-	if (rDiv1 == 0) goto CycleM1a ; no error
+	if (rDiv1 == 0) goto @ok
 	rjmp CycleOvf
-CycleM1a:
+@ok:
 	rcall Displ4Dec
 	ram[X++] = rmp = ' '
 	ram[X++] = rmp = 'H'
 	ram[X++] = rmp = 'z'
 	ram[X] = rmp = ' '
 	rjmp	DisplMode ('f')
+.endproc
 ;
 ; Mode 2: Time measured, prescale = 1, display frequency
 ;
-CycleM2:
+.proc CycleM2
 	rcall Divide
-	if (rRes4 != 0) goto CycleM2a
+	if (rRes4 != 0) goto @to_big
 	rcall DisplFrac
 	rcall DisplMode ('v')
 	ret
-CycleM2a:
+@to_big:
 	rRes3.rRes2.rRes1 = rRes4.rRes3.rRes2		; number too big, skip fraction
 	rRes4 = 0
 	rcall Displ4Dec
@@ -1541,10 +1439,11 @@ CycleM2a:
 	ram[X] = rmp = ' '
 	rcall DisplMode ('v')
 	ret
+.endproc
 ;
 ; Measure time, display rounds per minute
 ;
-CycleM3:
+.proc CycleM3
 	rcall Divide
 	r0 = 0 ; overflow detection
 	rmp = 0
@@ -1561,9 +1460,9 @@ CycleM3:
 	adc r0,rmp
 	rRes4.rRes3.rRes2.rRes1 <<= 1		; * 64
 	adc r0,rmp
-	if (r0 == 0) goto CycleM3a
+	if (r0 == 0) goto @a
 	rjmp CycleOvf
-CycleM3a:
+@a:
 	rRes4.rRes3.rRes2.rRes1 -= rDiv4.rDiv3.rDiv2.rDiv1
 	rRes3.rRes2.rRes1 = rRes4.rRes3.rRes2
 	rRes4 = 0
@@ -1574,48 +1473,53 @@ CycleM3a:
 	ram[X++] = rmp = 'm'
 	rcall DisplMode ('u')
 	ret
+.endproc
 ;
 ; Measure time high+low, display time
 ;
-CycleM4:
+.proc CycleM4
 	rcall Multiply
 	rcall Displ4Dec
 	rcall DisplSec
 	rcall DisplMode ('t')
 	ret
+.endproc
+
 ;
 ; Measure time high, display time
 ;
-CycleM5:
-	sbrs rFlg,bEdge
-	rjmp CycleM5a
+.proc CycleM5
+	sbrs rFlg, bEdge
+	rjmp @return
 	rcall Multiply
 	rcall Displ4Dec
 	rcall DisplSec
 	rcall DisplMode ('h')
-CycleM5a:
+@return:
 	ret
+.endproc
 ;
 ; Measure time low, display time
 ;
-CycleM6:
-	sbrc	rFlg,bEdge
-	rjmp	CycleM6a
+.proc CycleM6
+	sbrc	rFlg, bEdge
+	rjmp	@return
 	rcall Multiply
 	rcall Displ4Dec
 	rcall DisplSec
 	rcall DisplMode ('l')
-CycleM6a:
+@return:
 	ret
+.endproc
 ;
 ; Measure time high and low, display pulse width ratio high in %
 ;   if the edge was negative, store the measured time, if positive calculate
 ;   rRes and rDiv hold the active low time, sCtr the last active high time
 ;   to CalcPw: rDelH:rDelL:R0:rmp = active high time
 ;
-CycleM7:
-	sbrs rFlg,bEdge
-	rjmp CycleM7a
+.proc CycleM7
+	sbrs rFlg, bEdge
+	rjmp @edge_is_low
 	Z = sCtr			; edge is high, calculate
 
 	rRes1 = ram[Z++]	; copy counter value
@@ -1623,30 +1527,31 @@ CycleM7:
 	rRes3 = ram[Z++]
 	rRes4 = ram[Z++]
 	rDiv4.rDiv3.rDiv2.rDiv1 += rRes4.rRes3.rRes2.rRes1		; add to total time
-	brcs	CycleM7b
+	brcs	@overflow
 	rDelH.rDelL.r0.rmp = rRes4.rRes3.rRes2.rRes1				; copy high value to divisor
 	rcall CalcPw ; calculate the ratio
-	brcs CycleM7b ; error
+	brcs @overflow
 	rcall DisplPw ; display the ratio
 	rjmp DisplMode ('P')
-CycleM7a:
+@edge_is_low:
 	Z = sCtr
 	ram[Z++] = rRes1 ; copy counter value
 	ram[Z++] = rRes2
 	ram[Z++] = rRes3
 	ram[Z++] = rRes4
 	ret
-CycleM7b: ; overflow
+@overflow:
 	rjmp PulseOvflw ('P')
+.endproc
 ;
 ; Measure time high and low, display pulse width ratio low in %
 ;   if the edge was negative, store the measured time, if positive calculate
 ;   rRes and rDiv hold the active low time, sCtr the last active high time
 ;   to CalcPw: rDelH:rDelL:R0:rmp = active low time
 ;
-CycleM8:
-	sbrs rFlg,bEdge
-	rjmp CycleM8a
+.proc CycleM8
+	sbrs rFlg, bEdge
+	rjmp @edge_is_low
 	Z = sCtr		; edge is high, calculate
 	rmp = ram[Z++]	; read high-time
 	r0 = ram[Z++]
@@ -1655,118 +1560,19 @@ CycleM8:
 	rDiv4.rDiv3.rDiv2.rDiv1 += rDelH.rDelL.r0.rmp		; add to total time
 	rDelH.rDelL.r0.rmp = rRes4.rRes3.rRes2.rRes1
 	rcall CalcPw ; calculate the ratio
-	brcs CycleM8b ; error
+	brcs @overflow
 	rcall DisplPw ; display the ratio
 	rjmp DisplMode ('p')
-CycleM8a:
+@edge_is_low:
 	Z = sCtr
 	ram[Z++] = rRes1 ; copy counter value
 	ram[Z++] = rRes2
 	ram[Z++] = rRes3
 	ram[Z++] = rRes4
 	ret
-CycleM8b: ; overflow
+@overflow:
 	rjmp	PulseOvflw ('p')
-;
-; Converts an ADC value in R1:R0 to a voltage for display
-;   cAdc2U  input: ADC value, output: Voltage in V for display
-;
-cAdc2U:
-;	ldi	XH, HIGH(s_video_mem+16)		; point to result
-;	ldi	XL, LOW(s_video_mem+16)
-;	ldi	rmp, ' '
-;	st	X+, rmp
-;	st	X+, rmp
-;	st	X+, rmp
-;	st	X+, rmp
-;	st	X+, rmp
-;	st	X+, rmp
-	ret
-;
-;
-;
-;	clr	R2						; clear the registers for left shift in R3:R2
-;	clr	R3
-;	ldi	rmp, HIGH(cMultiplier)		; Multiplier to R5:R4
-;	mov	R5, rmp
-;	ldi	rmp, LOW(cMultiplier)
-;	mov	R4, rmp
-;	clr	XL						; clear result in ZH:ZL:XH:XL
-;	clr	XH
-;	clr	ZL
-;	clr	ZH
-;cAdc2U1:
-;	lsr	R5 						; shift Multiplier right
-;	ror	R4
-;	brcc	cAdc2U2 					; bit is zero, don't add
-;	add	XL, R0 					; add to result
-;	adc	XH, R1
-;	adc	ZL, R2
-;	adc	ZH, R3
-;cAdc2U2:
-;	mov	rmp, R4 					; check zero
-;	or	rmp, R5
-;	breq cAdc2U3 					; end of multiplication
-;	lsl	R0						; multiply by 2
-;	rol	R1
-;	rol	R2
-;	rol	R3
-;	rjmp cAdc2U1					; go on multipying
-;cAdc2U3:
-;	ldi	rmp, $80					; round up
-;	add	XL, rmp
-;	ldi	rmp, $00
-;	adc	XH, rmp
-;	adc	ZL, rmp
-;	adc	ZH, rmp
-;	tst	ZH						; check overflow
-;	mov	R1, XH					; copy result to R2:R1
-;	mov	R2, ZL
-;	ldi	XH, HIGH(s_video_mem+16)		; point to result
-;	ldi	XL, LOW(s_video_mem+16)
-;	ldi	rmp, 'U'
-;	st	X+, rmp
-;	breq	cAdc2U5
-;	ldi	ZH, HIGH(2*AdcErrTxt)
-;	ldi	ZL, LOW(2*AdcErrTxt)
-;cAdc2U4:
-;	lpm
-;	tst	R0
-;	breq	cAdc2U6
-;	sbiw	ZL, 1
-;	st	X+,R0
-;	rjmp	cAdc2U4
-;cAdc2U5:
-;	clr	R0
-;	ldi	ZH, HIGH(10000)
-;	ldi	ZL, LOW(10000)
-;	rcall DecConv
-;	inc	R0
-;	ldi	ZH, HIGH(1000)
-;	ldi	ZL, LOW(1000)
-;	rcall DecConv
-;	ldi	rmp, cDecSep
-;	st	X+,rmp
-;	clr	ZH
-;	ldi	ZL,100
-;	rcall DecConv
-;	ldi	ZL,10
-;	rcall DecConv
-;	ldi	rmp,'0'
-;	add	rmp,R1
-;	st	X+, rmp
-;	ldi	rmp,'V'
-;	st	X,rmp
-;	lds	rmp, s_video_mem+17
-;	cpi	rmp, ' '
-;	brne cAdc2U6
-;	ldi	rmp, '='
-;	sts	s_video_mem+17, rmp
-;cAdc2U6:
-;	ret
-;
-;AdcErrTxt:
-;	.DB	"overflw", $00
+.endproc	
 ;
 ; ===========================================
 ; Lcd display routines
@@ -1832,6 +1638,8 @@ LcdE:
 	io[PORTB] = rmp = r0 & 0x0F ; copy original back and clear upper nibble
 	rcall LcdE
 	rmp = r0 ; restore rmp
+
+	; TODO add delay 40 us here !!!
 	ret
 .endproc
 ;
@@ -1843,11 +1651,11 @@ LcdE:
 	rmp = r0
 	swap	rmp 			; upper nibble to lower nibble
 	rmp &= 0x0F 		; clear upper nibble
-	rmp |= 1<<bLcdRs 	; set Rs to one
+	rmp |= 1 << bLcdRs 	; set Rs to one
 	io[PORTB] = rmp 	; write to display interface
 	rcall LcdE 		; pulse E
 	rmp = r0 & 0x0F 	; copy original again and clear upper nibble
-	rmp |= 1<<bLcdRs	; set Rs to one
+	rmp |= 1 << bLcdRs	; set Rs to one
 	io[PORTB] = rmp 	; write to display interface
 	rcall LcdE
 	rcall Delay40us
@@ -1876,25 +1684,25 @@ LcdInit:
 	io[PORTB] = rmp = 0
 	rcall delay15ms ; wait for complete self-init
 	rcall LcdRs8 (0x03)		; Function set 8-bit interface
-	rcall delay4_1ms ; wait for 4.1 ms
+	rcall delay4_1ms
 	rcall LcdRs8 (0x03)		; Function set 8-bit interface
-	rcall delay100us ; wait for 100 us
+	rcall delay100us
 	rcall LcdRs8 (0x03)		; Function set 8-bit interface
-	rcall delay40us ; delay 40 us
+	rcall delay40us
 	rcall LcdRs8 (0x02)		; Function set 4-bit-interface
 	rcall delay40us
 	rcall LcdRs4 (0x28)		; 4-bit-interface, two line display
-	rcall delay40us ; delay 40 us
+	rcall delay40us
 	rcall LcdRs4 (0x08)		; display off
-	rcall delay40us ; delay 40 us
+	rcall delay40us
 	rcall LcdRs4 (0x01)		; display clear
-	rcall delay1_64ms ; delay 1.64 ms
+	rcall delay1_64ms
 	rcall LcdRs4 (0x06)		; increment, don't shift
-	rcall delay40us ; delay 40 us
+	rcall delay40us
 	rcall LcdRs4 (0x0C)		; display on
 	rcall delay40us
 	rcall LcdRs4 (0x80)		; position on line 1
-	rcall delay40us ; delay 40 us
+	rcall delay40us
 	Z = LcdInitTxt16
 	rcall LcdText (16)
 
@@ -1932,7 +1740,6 @@ LcdDisplayFT:
 	Z = s_video_mem
 
 	.loop (rmp = 16)
-		;r0 = ram[Z++]				; read a char
 		rcall LcdData4 (ram[Z++])				; display on LCD
 	.endloop
 	ret
@@ -1948,7 +1755,6 @@ LcdDisplayU:
 	rcall Delay40us
 	Z = s_video_mem + 16		; point to result
 	.loop (rmp = 16)
-		;r0 = ram[Z++]			; read character
 		rcall LcdData4 (ram[Z++])			; write r0 as data over 4-bit-interface to the LCD
 	.endloop
 	ret
@@ -1969,8 +1775,7 @@ UartInit: ; Init the Uart on startup
 	io[UCSRC] = rmp = (1<<URSEL)|(1<<UCSZ1)|(1<<UCSZ0) ; set 8 bit characters
 	io[UCSRB] = rmp = (1<<RXCIE)|(1<<RXEN)|(1<<TXEN) ; enable RX/TX and RX-Ints
 	rcall delay10ms ; delay for 10 ms duration
-	Z = txtUartInit
-	rjmp UartSendTxt
+	rjmp UartSendTxt (txtUartInit)
 ;
 ; Uart receive buffer space in SRAM
 ;   sUartRxBs is buffer start
@@ -2114,8 +1919,7 @@ UartInit: ; Init the Uart on startup
 	sez
 	ret
 @Err:
-	Z = txtUartErr
-	rcall UartSendTxt
+	rcall UartSendTxt (txtUartErr)
 @noParam:
 	clz ; No parameter set
 	ret
@@ -2143,8 +1947,7 @@ UartInit: ; Init the Uart on startup
 ;
 UartReturn:
 	rcall UartSendTxt ; send text in Z
-	Z = txtUartCursor
-	rjmp UartSendTxt
+	rjmp UartSendTxt (txtUartCursor)
 ;
 ; Send character in rmp over Uart
 ;
@@ -2152,7 +1955,7 @@ UartReturn:
 .args char(rmp)
 	sbis	UCSRA, UDRE		; wait for empty buffer
 	rjmp	UartSendChar
-	out	UDR, rmp
+	io[UDR] = rmp
 	ret
 .endproc
 ;
@@ -2184,7 +1987,7 @@ UartMonU2:
 	sbrs rmp, bUMonF ; displays frequency over Uart
 	ret
 	sUartMonFCnt = rmp = sUartMonFCnt - 1	; read counter
-	brne @ret
+	brne @return
 	sUartMonFCnt = rmp = sUartMonFRpt
 	Z = s_video_mem
 	.loop (rmp = 16)
@@ -2195,13 +1998,14 @@ UartMonU2:
 	.endloop
 	rcall UartSendChar (cCR)
 	rjmp UartSendChar (cLF)
-@ret:
+@return:
 	ret
 .endproc
 ;
 ; Send text from flash to UART, null byte ends transmit
 ;
 .proc UartSendTxt
+.args ptr(Z)
 	r0 = prg[Z] ; read character from flash
 	Z++	; TODO
 	if (r0 == 0) goto @ret

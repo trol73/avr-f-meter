@@ -1333,12 +1333,14 @@ Delay1_64ms:
 	ldi rDelH,HIGH(1640)
 	rjmp DelayZ
 Delay100us:
-	clr rDelH
 	ldi rDelL,100
+	;clr rDelH
+	ldi rDelH, 0
 	rjmp DelayZ
 Delay40us:
-	clr rDelH
 	ldi rDelL,40
+	;clr rDelH
+	ldi rDelH, 0
 	rjmp DelayZ
 ;
 ; Delays execution for Z microseconds
@@ -2043,7 +2045,7 @@ cAdc2U:
 ;	st	X+, rmp
 ;	st	X+, rmp
 ;	st	X+, rmp
-	ret
+;	ret
 ;
 ;
 ;
