@@ -352,12 +352,12 @@ sEncoderPrev:	; Encoder previous value
 ;   counts rTDiv down, if zero: starts an AD conversion
 ;
 TC2CmpInt:
-	in 	rSreg, SREG 		; save SREG
-	dec 	rTDiv 			; count down
+	rSreg = io[SREG] 		; save SREG
+	rTDiv-- 				; count down
 	brne	TC2CmpInt1 		; not zero, interval not ended
 	lds	rTDiv, sTMeas 		; restart interval timer
 TC2CmpInt1:
-	out	SREG, rSreg 		; restore SREG
+	io[SREG] = rSreg 		; restore SREG
 	reti
 ;
 ; External Interrupt INT0 Service Routine
@@ -369,11 +369,11 @@ TC2CmpInt1:
 ;   clears the counter and restarts it
 ;
 Int0Int:
-	in	rSreg, SREG 		; 1, save SREG
+	rSreg = io[SREG] 		; 1, save SREG
 	sbrc	rFlg, bCyc 		; 2/3, check if cycle flag signals ok for copy
 	rjmp	Int0Int1 			; 4, no, last result hasn't been read
-	in	rCpy1, TCNT1L 		; 4, read timer 1 LSB
-	in	rCpy2, TCNT1H 		; 5, dto., MSB
+	rCpy1 = io[TCNT1L] 		; 4, read timer 1 LSB
+	rCpy2 = io[TCNT1H] 		; 5, dto., MSB
 	rCpy3 = rCtr2 			; 6, copy the counter bytes
 	rCpy4 = rCtr3 			; 7
 	rFlg |= 1<<bCyc 		; 8, set cycle end flag bit
@@ -382,12 +382,12 @@ Int0Int:
 	rFlg |= 1<<bEdge 	; 11, no, set edge flag to rising
 Int0Int1: 				; 4/11
 	ldi	rimp, 0 			; 5/12, reset the timer
-	out	TCNT1H, rimp 		; 6/13, set TC1 zero to restart
-	out	TCNT1L, rimp 		; 7/14
-	rCtr1 =  rimp 			; 8/15, clear the upper bytes
+	io[TCNT1H] = rimp 		; 6/13, set TC1 zero to restart
+	io[TCNT1L] = rimp 		; 7/14
+	rCtr1 = rimp 			; 8/15, clear the upper bytes
 	rCtr2 = rimp 			; 9/16
 	rCtr3 = rimp 			; 10/17
-	out	SREG, rSreg 		; 11/18, restore SREG
+	io[SREG] = rSreg 		; 11/18, restore SREG
 	reti 				; 15/22
 ;
 ; TC1 Compare Match A Interrupt Service Routine
@@ -407,7 +407,7 @@ Tc1CmpAInt:
 	rFlg |= 1<<bCyc 		; 8, set cycle end flag bit
 Tc1CmpAInt1: 				; 4/8
 	ldi	rimp, 0 			; 5/9, clear counter
-	out	TCNT0, rimp 		; 6/10
+	io[TCNT0] = rimp 		; 6/10
 	rCtr1 = rimp 			; 7/11, clear counter bytes
 	rCtr2 = rimp 			; 8/12
 	rCtr3 = rimp 			; 9/13
@@ -511,9 +511,9 @@ SetModeName:
 	
 LcdInitMode:
 	.loop (rmp)
-		lpm
-		Z++
-		st	X+, R0
+		r0 = prg[Z]
+		Z++		; TODO
+		ram[X++] = r0
 	.endloop
 	rcall LcdText (len: 16)
 	ret
@@ -678,16 +678,16 @@ ClrTc:
 	rmp.r0.ZH.ZL.XH.XL <<= 1		; multiply divisor by 2
 	if (rmp.r0.ZH.ZL < rDiv4.rDiv3.rDiv2.rDiv1) goto @2		; compare with divident
 	rmp.r0.ZH.ZL -= rDiv4.rDiv3.rDiv2.rDiv1
-	sec
+	F_CARRY = 1
 	rjmp @3
 @2:
-	clc
+	F_CARRY = 0
 @3:
 	rol rRes1
 	rol rRes2
 	rol rRes3
 	rol rRes4
-	brcc @1
+	if (!F_CARRY) goto @1
 	ret
 .endproc	
 ;
@@ -713,11 +713,12 @@ ClrTc:
 	;if (XL != 0) goto @2
 	cpi XL, 0
 	brne @2
+	;if (XH != 0) goto @4
 	cpi XH, 0
 	breq @4
 @2:
 	XL.XH >>= 1
-	brcc @3
+	if (!F_CARRY) goto @3
 	ZH.ZL.rDiv4.rDiv3.rDiv2.rDiv1 += rmp.r0.rRes4.rRes3.rRes2.rRes1
 @3:
 	rmp.r0.rRes4.rRes3.rRes2.rRes1 <<= 1
@@ -771,20 +772,20 @@ TxtPOvflw16:
 ;   overflow: carry flag is set
 ;
 CalcPwO: ; overflow
-	sec
+	F_CARRY = 1
 	ret
 .proc CalcPw
 	rRes4.rRes3.rRes2.rRes1 = rDelH.rDelL.r0.rmp		; copy active cycle time to rRes
 	rRes4.rRes3.rRes2.rRes1 <<= 1		; * 2
-	brcs CalcPwO ; overflow
+	if (F_CARRY) goto CalcPwO 		; overflow
 	rRes4.rRes3.rRes2.rRes1 <<= 1		; * 4
-	brcs CalcPwO ; overflow
+	if (F_CARRY) goto CalcPwO 		; overflow
 	rRes4.rRes3.rRes2.rRes1 <<= 1		; * 8
-	brcs CalcPwO ; overflow
+	if (F_CARRY) goto CalcPwO 		; overflow
 	X = rRes2.rRes1
 	Z = rRes4.rRes3
 	rRes4.rRes3.rRes2.rRes1 <<= 1		; * 16
-	brcs CalcPwO
+	if (F_CARRY) goto CalcPwO 		; overflow
 	rRes4.rRes3.rRes2.rRes1 += ZH.ZL.XH.XL		; * 24
 	ZH = 0 ; clear the four MSBs of divisor
 	ZL = 0
@@ -809,10 +810,10 @@ CalcPwO: ; overflow
 	ZH.ZL.XH.XL.rDelH.rDelL.r0.rmp <<= 1
 	if (ZH.ZL.XH.XL < rDiv4.rDiv3.rDiv2.rDiv1) goto @2 ; smaller, roll zero in
 	ZH.ZL.XH.XL -= rDiv4.rDiv3.rDiv2.rDiv1				 ; subtract divisor
-	sec ; roll one in
+	F_CARRY = 1 	; roll one in
 	rjmp @3
 @2:
-	clc
+	F_CARRY = 0
 @3: ; roll result
 	rol rRes1
 	rol rRes2
@@ -828,17 +829,18 @@ CalcPwO: ; overflow
 	adc rRes3, rmp
 	adc rRes4, rmp
 @4:
-	if (rRes4 != 0) goto @E
-	if (rRes3 != 0) goto @E
+	if (rRes4 != 0) goto @Error
+	if (rRes3 != 0) goto @Error
+	;if (rRes2.rRes1 >= (rmp)1001)
 	rmp = LOW(1001)
 	cp rRes1, rmp
 	rmp = HIGH(1001)
 	cpc rRes2, rmp
-	brcc @E
-	clc ; no error
+	brcc @Error
+	F_CARRY = 0 	; no error
 	ret
-@E: ; error
-	sec
+@Error:
+	F_CARRY = 1
 	ret
 .endproc
 ;
@@ -893,9 +895,6 @@ DisplPw:
 	rmp = 0
 @1:
 	if (r2.r1 < ZH.ZL) goto @2 ; ended subtraction
-;	cp R1,ZL ; smaller than binary digit?
-;	cpc R2,ZH
-;	brcs @2 ; ended subtraction
 	r2.r1 -= Z 
 	rmp++
 	rjmp @1
@@ -936,9 +935,7 @@ DisplPw:
 	ram[X++] = rmp = ' '
 	ram[X++] = rmp = 'H'
 	ram[X++] = rmp = 'z'
-
-	rmp = ' '
-	ram[X++] = rmp
+	ram[X++] = rmp = ' '
 	ram[X++] = rmp
 	ram[X++] = rmp
 	ram[X++] = rmp
@@ -1020,7 +1017,7 @@ DisplPw:
 	cpc rRes3, rmp
 	rmp = BYTE4(100000000)
 	cpc rRes4, rmp
-	brcs @1
+	if (F_CARRY) goto @1
 	rjmp CycleOvf
 @1:
 	r0 = 0 ; suppress leading zeroes
@@ -1101,12 +1098,13 @@ DisplPw:
 .args val(ZL)
 	rDiv1 = 0 ; rDiv1 is counter
 	rDiv2 = 0 ; next byte overflow
-@loop:
-	if (rRes2.rRes1 < rDiv2.ZL) goto @break
-	rRes2.rRes1 -= rDiv2.ZL
-	rDiv1 ++
-	rjmp @loop
-@break:
+
+	.loop:
+		if (rRes2.rRes1 < rDiv2.ZL) break
+		rRes2.rRes1 -= rDiv2.ZL
+		rDiv1++
+	.endloop
+
 	rmp = '0' + rDiv1
 	r0 += rDiv1
 	if (r0 != 0) goto @c
@@ -1255,7 +1253,7 @@ bploop:
 	; Start main interval timer
 	io[OCR2] = rmp = cCmp2				; set Compare Match
 	io[TCCR2] = rmp = cPre2 | (1<<WGM21)	; CTC mode and prescaler
-	io[TIMSK] = rmp = (1<<OCIE2) 			; Start timer/counter TC2 interrupts
+	io[TIMSK] = rmp = 1<<OCIE2 			; Start timer/counter TC2 interrupts
 	sModeNext = rmp = 1					; Set initial mode to mode 1
 	rcall SetModeNext
 	sei 								; enable interrupts
@@ -1265,14 +1263,12 @@ main_loop:
 	sleep 								; send CPU to sleep
 	nop
 	; if meassure cycle ended then call Cycle()
-	sbrc	rFlg, bCyc 						; check cycle end (bCyc - measure cycle ended)
-	rcall Cycle							; calculate and display result
+	if (rFlg[bCyc]) rcall Cycle							; calculate and display result
 	; if adc conversation ended then call Interval
 	rcall Interval
 .IF cUart
 	; if Uart line complete rhen can UartRxLine
-	sbrc rFlg, bUartRxLine					; check line complete
-	rcall UartRxLine						; call line complete
+	if (rFlg[bUartRxLine]) rcall UartRxLine						; call line complete
 .ENDIF
 	rjmp main_loop 						; go to sleep
 ; --------[main loop] end --------------------	
@@ -1338,22 +1334,22 @@ main_loop:
 ;
 ;.extern TxtOvf16 : prgptr
 .proc Cycle
-	sbrc rFlg, bOvf ; check overflow
-	rjmp CycleOvf ; jump to overflow
+	if (rFlg[bOvf]) goto CycleOvf
 	rRes4.rRes3.rRes2.rRes1 = rCpy4.rCpy3.rCpy2.rCpy1		; copy counter
 	cbr rFlg, (1<<bCyc)|(1<<bOvf) ; clear cycle flag and overflow
 	rDiv4.rDiv3.rDiv2.rDiv1 = rRes4.rRes3.rRes2.rRes1		; copy again
 .IF cUart
-	;Z = UartMonF
-	ldi ZH, HIGH(UartMonF) ; put monitoring frequency on stack
-	ldi ZL, LOW(UartMonF)
+	Z = UartMonF/2		; put monitoring frequency on stack
+	;ldi ZH, HIGH(UartMonF) ; put monitoring frequency on stack
+	;ldi ZL, LOW(UartMonF)
 	push ZL ZH
 .ENDIF
 ; calculate and display result
-	ldi ZH, HIGH(CycleTab) ; point to mode table
-	ldi ZL, LOW(CycleTab)
+	Z = CycleTab/2		; point to mode table
+	;ldi ZH, HIGH(CycleTab) ; point to mode table
+	;ldi ZL, LOW(CycleTab)
 	ZL += rMode ; displace table by mode
-	brcc @not_inc
+	if (!F_CARRY) goto @not_inc
 	ZH++
 @not_inc:
 	ijmp ; call the calculation routine
@@ -1448,6 +1444,8 @@ CycleTab:
 	r0 = 0 ; overflow detection
 	rmp = 0
 	rRes4.rRes3.rRes2.rRes1 <<= 1		; * 2
+	;r0 += rmp + F_CARRY
+	;r0 = r0 + rmp + F_CARRY
 	adc r0, rmp
 	rRes4.rRes3.rRes2.rRes1 <<= 1		; * 4
 	adc r0,rmp
@@ -1489,8 +1487,7 @@ CycleTab:
 ; Measure time high, display time
 ;
 .proc CycleM5
-	sbrs rFlg, bEdge
-	rjmp @return
+	if (!rFlg[bEdge]) goto @return
 	rcall Multiply
 	rcall Displ4Dec
 	rcall DisplSec
@@ -1502,8 +1499,7 @@ CycleTab:
 ; Measure time low, display time
 ;
 .proc CycleM6
-	sbrc	rFlg, bEdge
-	rjmp	@return
+	if (rFlg[bEdge]) goto @return
 	rcall Multiply
 	rcall Displ4Dec
 	rcall DisplSec
@@ -1518,8 +1514,7 @@ CycleTab:
 ;   to CalcPw: rDelH:rDelL:R0:rmp = active high time
 ;
 .proc CycleM7
-	sbrs rFlg, bEdge
-	rjmp @edge_is_low
+	if (!rFlg[bEdge]) goto @edge_is_low		; TODO !!!!! move Z = sCtr brefore this line !!!
 	Z = sCtr			; edge is high, calculate
 
 	rRes1 = ram[Z++]	; copy counter value
@@ -1527,10 +1522,10 @@ CycleTab:
 	rRes3 = ram[Z++]
 	rRes4 = ram[Z++]
 	rDiv4.rDiv3.rDiv2.rDiv1 += rRes4.rRes3.rRes2.rRes1		; add to total time
-	brcs	@overflow
+	if (F_CARRY) goto @overflow
 	rDelH.rDelL.r0.rmp = rRes4.rRes3.rRes2.rRes1				; copy high value to divisor
 	rcall CalcPw ; calculate the ratio
-	brcs @overflow
+	if (F_CARRY) goto @overflow
 	rcall DisplPw ; display the ratio
 	rjmp DisplMode ('P')
 @edge_is_low:
@@ -1550,8 +1545,7 @@ CycleTab:
 ;   to CalcPw: rDelH:rDelL:R0:rmp = active low time
 ;
 .proc CycleM8
-	sbrs rFlg, bEdge
-	rjmp @edge_is_low
+	if (!rFlg[bEdge]) goto @edge_is_low		; TODO !!!!! move Z = sCtr brefore this line !!!
 	Z = sCtr		; edge is high, calculate
 	rmp = ram[Z++]	; read high-time
 	r0 = ram[Z++]
@@ -1560,7 +1554,7 @@ CycleTab:
 	rDiv4.rDiv3.rDiv2.rDiv1 += rDelH.rDelL.r0.rmp		; add to total time
 	rDelH.rDelL.r0.rmp = rRes4.rRes3.rRes2.rRes1
 	rcall CalcPw ; calculate the ratio
-	brcs @overflow
+	if (F_CARRY) goto @overflow
 	rcall DisplPw ; display the ratio
 	rjmp DisplMode ('p')
 @edge_is_low:
@@ -1616,13 +1610,12 @@ LcdE:
 	io[PORTB].bLcdE = 0
 	ret
 ;
-; outputs the content of rmp (temporary
-; 8-Bit-Interface during startup)
+; outputs the content of rmp (temporary 8-Bit-Interface during startup)
 ;
 .proc LcdRs8
 .args val(rmp)
 	io[PORTB] = val
-	rcall LcdE
+	rcall LcdE		; TODO !!! rjmp
 	ret
 .endproc
 ;
@@ -1669,8 +1662,6 @@ LcdE:
 .proc LcdText
 .args len(R16)
 	.loop (len)
-		;r0 = prg[Z++]				; read character from flash
-		;Z++	; TODO [Z++]
 		rcall	LcdData4 (prg[Z++])			; write to 
 		rcall	delay40us
 	.endloop
@@ -1818,20 +1809,20 @@ UartInit: ; Init the Uart on startup
 @2:
 	if (rmp != 'U') goto @3		; monitor U on
 	rcall UartGetPar
-	sec
+	F_CARRY = 1
 	rjmp @USetC
 @3:
 	if (rmp != 'u') goto @4		; monitor U off
-	clc
+	F_CARRY = 0
 	rjmp @USetC
 @4:
 	if (rmp != 'F') goto @5		; monitor F on
 	rcall UartGetPar
-	sec
+	F_CARRY = 1
 	rjmp @FSetC
 @5:
 	if (rmp != 'f') goto @6		; monitor f off
-	clc
+	F_CARRY = 0
 	rjmp @FSetC
 @6:
 	if (rmp != 'p') goto @7		; parameter?
@@ -1844,13 +1835,13 @@ UartInit: ; Init the Uart on startup
 	ret
 @USetC:
 	rmp = sUartFlag
-	brcs @USetC1
-	cbr rmp,1<<bUMonU ; clear flag
+	if (F_CARRY) goto @USetC1
+	cbr rmp, 1<<bUMonU ; clear flag
 	sUartFlag = rmp
 	Z = txtUartUOff
 	ret
 @USetC1:
-	brne @USetC2
+	if (!F_ZERO) goto @USetC2
 	sUartMonURpt = r0
 	sUartMonUCnt = r0
 @USetC2:
@@ -1860,13 +1851,13 @@ UartInit: ; Init the Uart on startup
 	ret
 @FSetC:
 	rmp = sUartFlag
-	brcs @FSetC1
+	if (F_CARRY) goto @FSetC1
 	cbr rmp, 1<<bUMonF ; clear flag
 	sUartFlag = rmp
 	Z = txtUartFOff
 	ret
 @FSetC1:
-	brne @FSetC2
+	if (!F_ZERO) goto @FSetC2
 	sUartMonFRpt = r0
 	sUartMonFCnt = r0
 @FSetC2:
@@ -1893,35 +1884,36 @@ UartInit: ; Init the Uart on startup
 .proc UartGetPar
 	r0 = 0 			; result register
 	rmp = ram[Z++]		; read char
-	if (rmp == cCR) goto @noParam
-	if (rmp == cLF) goto @noParam
+	if (rmp == cCR) goto @no_param
+	if (rmp == cLF) goto @no_param
 	if (rmp != '=') goto @Err
-@1:
-	rmp = ram[Z++]		; read next char
-	if (rmp == cCR) goto @2
-	if (rmp == cLF) goto @2
-	rmp -= '0'
-	brcs @Err
-	if (rmp >= 10) goto @Err
-	rir = r0
-	r0 <<= 1 ; * 2
-	brcs @Err
-	r0 <<= 1 ; * 4
-	brcs @Err
-	r0 += rir ; * 5
-	brcs @Err
-	r0 <<= 1 ; * 10
-	brcs @Err
-	r0 += rmp ; add new decimal
-	brcs @Err
-	rjmp @1
-@2:
-	sez
+
+	.loop
+		rmp = ram[Z++]		; read next char
+		if (rmp == cCR) break
+		if (rmp == cLF) break
+		rmp -= '0'
+		if (F_CARRY) goto @Err
+		if (rmp >= 10) goto @Err
+		rir = r0
+		r0 <<= 1 ; * 2
+		if (F_CARRY) goto @Err
+		r0 <<= 1 ; * 4
+		if (F_CARRY) goto @Err
+		r0 += rir ; * 5
+		if (F_CARRY) goto @Err
+		r0 <<= 1 ; * 10
+		if (F_CARRY) goto @Err
+		r0 += rmp ; add new decimal
+		if (F_CARRY) goto @Err
+	.endloop
+
+	F_ZERO = 1
 	ret
 @Err:
 	rcall UartSendTxt (txtUartErr)
-@noParam:
-	clz ; No parameter set
+@no_param:
+	F_ZERO = 0 ; No parameter set
 	ret
 .endproc
 ;
@@ -1931,14 +1923,14 @@ UartInit: ; Init the Uart on startup
 .args val(rmp)
 	push	val
 	swap	val
-	rcall @N
+	rcall @send_nibble
 	pop	val
-@N:
+@send_nibble:
 	val &= 0x0F
 	val += '0'
-	if (val < '9'+1) goto @N1
+	if (val < '9'+1) goto @0_9
 	val += 7
-@N1:
+@0_9:
 	rjmp UartSendChar
 	ret 			; TODO extra ret !!!
 .endproc
@@ -1953,47 +1945,42 @@ UartReturn:
 ;
 .proc UartSendChar
 .args char(rmp)
-	sbis	UCSRA, UDRE		; wait for empty buffer
-	rjmp	UartSendChar
+	if (!io[UCSRA].UDRE) goto UartSendChar		; wait for empty buffer
 	io[UDR] = rmp
 	ret
 .endproc
 ;
 ; Monitoring the voltage over the Uart
 ;
-UartMonU:
+.proc UartMonU
 	rmp = sUartFlag ; flag register for Uart
-	sbrs rmp, bUMonU ; displays voltage over Uart
-	ret
+	if (!rmp[bUMonU]) ret		; displays voltage over Uart
 	sUartMonUCnt = rmp = sUartMonUCnt - 1 ; read counter
-	brne UartMonU2
+	if (!F_ZERO) goto @return
 	sUartMonUCnt = rmp = sUartMonURpt
 	Z = s_video_mem + 16
 	.loop (rmp = 8)
-UartMonU1:
-		sbis UCSRA, UDRE ; wait for empty buffer
-		rjmp UartMonU1
+		if (!io[UCSRA].UDRE) continue	; wait for empty buffer
 		io[UDR] = r0 = ram[Z++]
 	.endloop
 	rcall UartSendChar (cCR)
 	rjmp UartSendChar (cLF)
-UartMonU2:
+@return:
 	ret
+.endproc
+
 ;
 ; Monitor frequency over UART
 ;
 .proc UartMonF
-	rmp = sUartFlag ; flag register for Uart
-	sbrs rmp, bUMonF ; displays frequency over Uart
-	ret
+	rmp = sUartFlag 			; flag register for Uart
+	if (!rmp[bUMonF]) ret		; displays frequency over Uart
 	sUartMonFCnt = rmp = sUartMonFCnt - 1	; read counter
-	brne @return
+	if (!F_ZERO) goto @return
 	sUartMonFCnt = rmp = sUartMonFRpt
 	Z = s_video_mem
 	.loop (rmp = 16)
-@continue:
-		sbis UCSRA, UDRE ; wait for empty buffer
-		rjmp @continue
+		if (!io[UCSRA].UDRE) continue	; wait for empty buffer
 		io[UDR] = r0 = ram[Z++]
 	.endloop
 	rcall UartSendChar (cCR)
@@ -2010,8 +1997,7 @@ UartMonU2:
 	Z++	; TODO
 	if (r0 == 0) goto @ret
 @wait:
-	sbis	UCSRA, UDRE ; wait for empty char
-	rjmp	@wait
+	if (!io[UCSRA].UDRE) goto @wait
 	io[UDR] = r0 ; send char
 	rjmp	UartSendTxt
 @ret:
