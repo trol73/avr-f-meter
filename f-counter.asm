@@ -559,8 +559,7 @@ SetModeNext:
 
 	rMode = rmp = sModeNext 		; read next mode
 
-	ldi		ZL, LOW(SetModeTab)
-	ldi		ZH, HIGH(SetModeTab)
+	Z = SetModeTab/2
 	add		ZL, rmp
 	ldi		rmp, 0
 	adc		ZH, rmp
@@ -679,10 +678,9 @@ ClrTc:
 	if (rmp.r0.ZH.ZL >= rDiv4.rDiv3.rDiv2.rDiv1) {		; compare with divident
 		rmp.r0.ZH.ZL -= rDiv4.rDiv3.rDiv2.rDiv1
 		F_CARRY = 1
-		rjmp @3
+	} else {
+		F_CARRY = 0
 	}
-	F_CARRY = 0
-@3:
 	rol rRes1
 	rol rRes2
 	rol rRes3
@@ -709,7 +707,7 @@ ClrTc:
 	rDiv1 = 0
 	r0 = 0
 	rmp = 0
-@1:
+@loop:
 	;if (XL != 0) goto @2
 	cpi XL, 0
 	brne @2
@@ -718,11 +716,11 @@ ClrTc:
 	breq @4
 @2:
 	XL.XH >>= 1
-	if (!F_CARRY) goto @3
-	ZH.ZL.rDiv4.rDiv3.rDiv2.rDiv1 += rmp.r0.rRes4.rRes3.rRes2.rRes1
-@3:
+	if (F_CARRY) {
+		ZH.ZL.rDiv4.rDiv3.rDiv2.rDiv1 += rmp.r0.rRes4.rRes3.rRes2.rRes1
+	}
 	rmp.r0.rRes4.rRes3.rRes2.rRes1 <<= 1
-	rjmp @1
+	rjmp @loop
 @4:
 	rmp = 128 ; round result
 	r0 = 0
@@ -804,20 +802,19 @@ CalcPwO: ; overflow
 	rRes2 = 0
 	rRes3 = 0
 	rRes4 = 0
-@1: ; dividing loop
+@loop: ; dividing loop
 	ZH.ZL.XH.XL.rDelH.rDelL.r0.rmp <<= 1
 	if (ZH.ZL.XH.XL >= rDiv4.rDiv3.rDiv2.rDiv1) { ; smaller, roll zero in
 		ZH.ZL.XH.XL -= rDiv4.rDiv3.rDiv2.rDiv1				 ; subtract divisor
 		F_CARRY = 1 	; roll one in
-		rjmp @3
+	} else {
+		F_CARRY = 0
 	}
-	F_CARRY = 0
-@3: ; roll result
 	rol rRes1
 	rol rRes2
 	rol rRes3
 	rol rRes4
-	if (!F_CARRY) goto @1 ; roll on
+	if (!F_CARRY) goto @loop ; roll on
 	ZH.ZL.XH.XL.rDelL <<= 1	; round result
 	if (ZH.ZL.XH.XL >= rDiv4.rDiv3.rDiv2.rDiv1) {
 		rmp = 1 ; round up
