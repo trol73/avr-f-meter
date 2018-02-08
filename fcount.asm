@@ -1684,14 +1684,14 @@ Cycle:
 	mov rDiv3, rRes3
 	mov rDiv4, rRes4
 .IF cUart
-	ldi ZH, HIGH(UartMonF) ; put monitoring frequency on stack
 	ldi ZL, LOW(UartMonF)
+	ldi ZH, HIGH(UartMonF) ; put monitoring frequency on stack
 	push ZL
 	push ZH
 .ENDIF
 ; calculate and display result
-	ldi ZH, HIGH(CycleTab) ; point to mode table
 	ldi ZL, LOW(CycleTab)
+	ldi ZH, HIGH(CycleTab) ; point to mode table
 	add ZL, rMode ; displace table by mode
 	brcc Cycle1
 	inc ZH
