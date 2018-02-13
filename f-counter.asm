@@ -376,10 +376,10 @@ Int0Int:
 	rCpy2 = io[TCNT1H] 		; 5, dto., MSB
 	rCpy3 = rCtr2 			; 6, copy the counter bytes
 	rCpy4 = rCtr3 			; 7
-	rFlg |= 1<<bCyc 		; 8, set cycle end flag bit
-	cbr	rFlg, 1<<bEdge 	; 9, set falling edge
+	rFlg[bCyc] = 1			; 8, set cycle end flag bit
+	rFlg[bEdge] = 0	 	; 9, set falling edge
 	sbic	PIND, 2 			; 10/11, check if input = 0
-	rFlg |= 1<<bEdge 	; 11, no, set edge flag to rising
+	rFlg[bEdge] = 1		; 11, no, set edge flag to rising
 Int0Int1: 				; 4/11
 	ldi	rimp, 0 			; 5/12, reset the timer
 	io[TCNT1H] = rimp 		; 6/13, set TC1 zero to restart
@@ -404,7 +404,7 @@ Tc1CmpAInt:
 	rCpy2 = rCtr1			; 5, copy counter bytes to result
 	rCpy3 = rCtr2 			; 6
 	rCpy4 = rCtr3 			; 7
-	rFlg |= 1<<bCyc 		; 8, set cycle end flag bit
+	rFlg[bCyc] = 1			; 8, set cycle end flag bit
 Tc1CmpAInt1: 				; 4/8
 	ldi	rimp, 0 			; 5/9, clear counter
 	io[TCNT0] = rimp 		; 6/10
@@ -476,12 +476,12 @@ SioRxCIsr2: 							; 19/20
 	brne SioRxCIsr3 					; 21/22/23, No, go on
 	rimp = cLF	 					; 22/23, Echo linefeed
 	io[UDR] = rimp 					; 23/24
-	rFlg |= (1<<bUartRxLine) 			; 24/25, Set line complete flag
+	rFlg[bUartRxLine] = 1 				; 24/25, Set line complete flag
 	rjmp	SioRxCIsr3a
 SioRxCIsr3: 							; 22/23/24/25
 	cpi	rimp, cLF
 	brne	SioRxCIsr3a
-	rFlg |= (1<<bUartRxLine)
+	rFlg[bUartRxLine] = 1 				
 SioRxCIsr3a:
 	pop	ZL ZH						; 24/25/26/27, 26/27/28/29, restore Z-register
 SioRxCIsr4:							; 9/26/27/28/29
@@ -1160,7 +1160,7 @@ Delay40us:
 	nop
 .ENDIF
 	rDelH.rDelL -= 1
-	brne DelayZ ; 2
+	if (!F_ZERO) goto DelayZ ; 2
 	ret
 .endproc
 ;
@@ -1181,8 +1181,9 @@ main:
 	rDiv2 = rRes2 = rmp = BYTE2(number)
 	rDiv1 = rRes1 = rmp = BYTE1(number)
 	rcall CycleM6
-beloop:	
-	rjmp beloop
+
+	loop {
+	}
 .ENDIF
 .IF debugpulse
 	.EQU nhigh = 100000000
@@ -1200,10 +1201,10 @@ beloop:
 	rDiv3 = rRes3 = rmp = BYTE3(nlow)
 	rDiv2 = rRes2 = rmp = BYTE2(nlow)
 	rDiv1 = rRes1 = rmp  = BYTE1(nlow)
-	rFlg |= 1<<bEdge
+	rFlg[bEdge] = 1
 	rcall CycleM7
-bploop: 
-	rjmp bploop
+	loop {
+	}
 .ENDIF
 ;
 ; Clear the output storage
@@ -1275,12 +1276,12 @@ main_loop:
 	ZL |= rmp			; encoder value in ZL
 
 	ZH = rMode
-	; 1 7 8 14 -> clockwise
+
 	if (ZL == 1) goto @clockwise
 	if (ZL == 7) goto @clockwise
 	if (ZL == 8) goto @clockwise
 	if (ZL == 14) goto @clockwise
-	; 2 4 11 13 -> counterclockwise
+
 	if (ZL == 2) goto @counterclockwise
 	if (ZL == 4) goto @counterclockwise
 	if (ZL == 11) goto @counterclockwise
@@ -1292,8 +1293,9 @@ main_loop:
 	ZH = 8			; set to 9
 	rjmp @done
 @counterclockwise:
-	if (ZH == 0) goto @done
-	ZH--
+	if (ZH != 0) {
+		ZH--
+	}
 @done:
 
 	sModeNext = ZH 			; store next mode
@@ -1375,10 +1377,10 @@ CycleTab:
 	rDiv1 = 0 ; for detecting an overflow in R5
 	rDiv1.rRes4.rRes3.rRes2.rRes1 <<= 6		; * 64
 	
-	if (rDiv1 == 0) goto @ok
-	rjmp CycleOvf
+	if (rDiv1 != 0) {
+		rjmp CycleOvf
+	}
 	
-@ok:
 	rcall Displ4Dec
 	ram[X++] = rmp = ' '
 	ram[X++] = rmp = 'H'
@@ -1393,9 +1395,9 @@ CycleTab:
 .proc CycleM1
 	rDiv1 = 0 ; detect overflow in rDiv1
 	rDiv1.rRes4.rRes3.rRes2.rRes1 <<= 2		; * 4
-	if (rDiv1 == 0) goto @ok
-	rjmp CycleOvf
-@ok:
+	if (rDiv1 != 0) {
+		rjmp CycleOvf
+	}
 	rcall Displ4Dec
 	ram[X++] = rmp = ' '
 	ram[X++] = rmp = 'H'
@@ -1432,7 +1434,6 @@ CycleTab:
 	rmp = 0
 	rRes4.rRes3.rRes2.rRes1 <<= 1		; * 2
 	;r0 += rmp + F_CARRY
-	;r0 = r0 + rmp + F_CARRY
 	adc r0, rmp
 	rRes4.rRes3.rRes2.rRes1 <<= 1		; * 4
 	adc r0,rmp
@@ -1627,11 +1628,11 @@ LcdE:
 	rmp = r0
 	swap	rmp 			; upper nibble to lower nibble
 	rmp &= 0x0F 		; clear upper nibble
-	rmp |= 1 << bLcdRs 	; set Rs to one
+	rmp[bLcdRs] = 1 	; set Rs to one
 	io[PORTB] = rmp 	; write to display interface
 	rcall LcdE 		; pulse E
 	rmp = r0 & 0x0F 	; copy original again and clear upper nibble
-	rmp |= 1 << bLcdRs	; set Rs to one
+	rmp[bLcdRs] = 1	; set Rs to one
 	io[PORTB] = rmp 	; write to display interface
 	rcall LcdE
 	rcall Delay40us
@@ -1777,7 +1778,7 @@ UartInit: ; Init the Uart on startup
 .extern UartReturn : ptr
 
 .proc UartRxLine
-	cbr rFlg, 1<<bUartRxLine ; clear line complete flag
+	rFlg[bUartRxLine] = 0		; clear line complete flag
 	sUartRxBp = rmp = LOW(sUartRxBs) ; set buffer pointer to start
 	Z = UartReturn
 	push ZL ZH
@@ -1818,7 +1819,7 @@ UartInit: ; Init the Uart on startup
 @USetC:
 	rmp = sUartFlag
 	if (!F_CARRY) {
-		cbr rmp, 1<<bUMonU ; clear flag
+		rmp[bUMonU] = 0
 		sUartFlag = rmp
 		Z = txtUartUOff
 		ret
@@ -1827,14 +1828,14 @@ UartInit: ; Init the Uart on startup
 		sUartMonURpt = r0
 		sUartMonUCnt = r0
 	}
-	rmp |= 1<<bUMonU ; set flag
+	rmp[bUMonU] = 1
 	sUartFlag = rmp
 	Z = txtUartUOn
 	ret
 @FSetC:
 	rmp = sUartFlag
 	if (!F_CARRY) {
-		cbr rmp, 1<<bUMonF ; clear flag
+		rmp[bUMonF] = 0
 		sUartFlag = rmp
 		Z = txtUartFOff
 		ret
@@ -1843,7 +1844,7 @@ UartInit: ; Init the Uart on startup
 		sUartMonFRpt = r0
 		sUartMonFCnt = r0
 	}
-	rmp |= 1<<bUMonF ; set flag
+	rmp[bUMonF] = 1
 	sUartFlag = rmp
 	Z = txtUartFOn
 	ret
